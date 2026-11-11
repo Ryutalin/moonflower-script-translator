@@ -819,6 +819,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
         public void registerButton(final String name, final boolean value) { registerSettings(new BooleanSetting(name, value)); }
         public void registerButton(final String group, final String name, final boolean value) { registerButton(name, value); }
         public void registerSlider(final String name, final String suffix, final double value, final double min, final double max, final double step) { registerSettings(new NumberSetting(name, suffix, value, min, max, step)); }
+        public void registerSlider(final String name, final double value, final double min, final double max, final double step) { registerSlider(name, "", value, min, max, step); }
         public void registerSlider(final String group, final String name, final String suffix, final double value, final double min, final double max, final double step) { registerSlider(name, suffix, value, min, max, step); }
         public void registerSlider(final String name, final String suffix, final int value, final String[] options) { registerSettings(new NumberSetting(name, suffix, value, 0, Math.max(1, options.length - 1), 1)); }
         public void registerSlider(final String group, final String name, final String suffix, final int value, final String[] options) { registerSlider(name, suffix, value, options); }
@@ -966,6 +967,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
             final net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.parse(n.contains(":") ? n : "minecraft:" + n);
             mc.player.playSound(net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id), (float) volume, (float) pitch);
         }
+        public int getItemInUseCount() { return mc.player == null ? 0 : mc.player.getUseItemRemainingTicks(); }
         public void closeScreen() { mc.gui.setScreen(null); }
         public String getScreen() { return mc.gui.screen() == null ? "" : mc.gui.screen().getClass().getSimpleName(); }
         public String getServerIP() { return mc.getCurrentServer() == null ? "" : mc.getCurrentServer().ip; }
@@ -1407,6 +1409,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
             const args = splitArgs(m, src, open + 1, end).map((a) => a.trim());
             if (args.length !== 4 && args.length !== 5) continue;
             const nameArg = args[args.length - 4], def = args[args.length - 2], last = args[args.length - 1];
+            if (/^[-+]?[\d.]+[fFdD]?$/.test(last)) continue;
             const lit = last.match(/^new\s+String\s*\[\s*\]\s*\{([\s\S]*)\}$/);
             const body = lit ? lit[1] : /^\w+$/.test(last) ? arrays[last] : undefined;
             const labels = [];
