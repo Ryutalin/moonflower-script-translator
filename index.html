@@ -441,12 +441,14 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
         public final int entityId;
         public final String type;
         public final boolean isUser;
+        public final boolean isLiving;
 
         Entity(final net.minecraft.world.entity.Entity e) {
             raw = e;
             entityId = e.getId();
             type = e.getClass().getSimpleName();
             isUser = e == mc.player;
+            isLiving = e instanceof net.minecraft.world.entity.LivingEntity;
         }
 
         static Entity of(final net.minecraft.world.entity.Entity e) {
@@ -462,6 +464,8 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
         }
 
         public Vec3 getPosition() { return Vec3.of(raw.position()); }
+        public Vec3 getMotion() { return Vec3.of(raw.getDeltaMovement()); }
+        public void setMotion(final Vec3 v) { raw.setDeltaMovement(v.x, v.y, v.z); }
         public Vec3 getLastPosition() { return new Vec3(raw.xo, raw.yo, raw.zo); }
         public Vec3 getServerPosition() { return getPosition(); }
         public Vec3 getBlockPosition() { final net.minecraft.core.BlockPos p = raw.blockPosition(); return new Vec3(p.getX(), p.getY(), p.getZ()); }
