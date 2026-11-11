@@ -1816,6 +1816,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
             "import java.util.*;",
         ];
         const extra = imports.filter((i) => !baseImports.includes(i) && i !== "import java.util.*;");
+        if (/(^|[^.\w$])Color\s*\./.test(mask(src)) && !extra.some((i) => /^import\s+java\.awt\.(Color|\*)\s*;/.test(i))) extra.push("import java.awt.Color;");
 
         const out = [
             ...baseImports,
