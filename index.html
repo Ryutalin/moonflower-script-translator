@@ -826,6 +826,14 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
         public void registerKey(final String group, final String name, final int key) { registerKey(name, key); }
         @SuppressWarnings({"unchecked", "rawtypes"})
         public void registerMode(final String name, final Enum<?> value) { registerSettings(new wtf.opal.client.feature.module.setting.impl.mode.ModeSetting(name, (Enum) value)); }
+        public void registerColor(final String name, final int r, final int g, final int b) {
+            final int rgb = 0xFF000000 | (r & 255) << 16 | (g & 255) << 8 | (b & 255);
+            final wtf.opal.client.feature.module.setting.impl.ColorSetting setting = new wtf.opal.client.feature.module.setting.impl.ColorSetting(name, rgb);
+            setting.applyValue(rgb);
+            registerSettings(setting);
+        }
+        public void registerColor(final String group, final String name, final int r, final int g, final int b) { registerColor(name, r, g, b); }
+        public int getColor(final String module, final String name) { return findSetting(module, name) instanceof wtf.opal.client.feature.module.setting.impl.ColorSetting c ? c.getValue() & 0xFFFFFF : 0; }
         public void registerGroup(final String group) { }
         public void registerDescription(final String description) { }
         public void enable(final String name) { final wtf.opal.client.feature.module.Module m = findModule(name); if (m != null) m.setEnabled(true); }
@@ -998,6 +1006,8 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
 
         void begin2D() { scale = mc.getWindow().getGuiScale(); }
 
+        public void showGui() { mc.gui.setScreen(new EmptyGuiScreen()); }
+
         final List<Object[]> texts = new ArrayList<>();
 
         public void rect(final float x1, final float y1, final float x2, final float y2, final int color) {
@@ -1075,6 +1085,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
         org.joml.Matrix4f matrix = new org.joml.Matrix4f();
         float r = 1, g = 1, b = 1, a = 1;
         boolean depth = false;
+        boolean mask = true;
         int mode = -1;
 
         wtf.opal.utility.render.Color color() {
@@ -1155,7 +1166,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
 
         void draw3D(final int m) {
             final wtf.opal.event.impl.render.Render3DEvent e = render.event3D;
-            final wtf.opal.utility.render.mesh.Renderer3D q = depth ? e.depthRenderer() : e.renderer();
+            final wtf.opal.utility.render.mesh.Renderer3D q = depth ? (mask ? e.solidRenderer() : e.depthRenderer()) : e.renderer();
             final double cx = e.cameraX(), cy = e.cameraY(), cz = e.cameraZ();
             for (final int[] l : lines(m)) {
                 final double[] p = verts.get(l[0]), o = verts.get(l[1]);
@@ -1170,7 +1181,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
         public void alpha(final boolean v) { }
         public void blend(final boolean v) { }
         public void cull(final boolean v) { }
-        public void depthMask(final boolean v) { }
+        public void depthMask(final boolean v) { mask = v; }
         public void lighting(final boolean v) { }
         public void lineSmooth(final boolean v) { }
         public void lineWidth(final double width) { }
@@ -1182,7 +1193,41 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
         public void disableItemLighting() { }
     }
 
+    static final class EmptyGuiScreen extends net.minecraft.client.gui.screens.Screen {
+        EmptyGuiScreen() { super(net.minecraft.network.chat.Component.empty()); }
+    }
+
+    public final class Config {
+        final java.io.File file = new java.io.File(wtf.opal.client.Constants.DIRECTORY, "raven_config.properties");
+
+        synchronized Properties read() {
+            final Properties p = new Properties();
+            if (file.exists()) try (final java.io.InputStream in = new java.io.FileInputStream(file)) { p.load(in); } catch (final java.io.IOException ignored) { }
+            return p;
+        }
+
+        public synchronized String get(final String key) { return read().getProperty(key, ""); }
+        public synchronized void set(final String key, final String value) {
+            final Properties p = read();
+            p.setProperty(key, value == null ? "" : value);
+            file.getParentFile().mkdirs();
+            try (final java.io.OutputStream out = new java.io.FileOutputStream(file)) { p.store(out, null); } catch (final java.io.IOException ignored) { }
+        }
+        public synchronized void remove(final String key) {
+            final Properties p = read();
+            p.remove(key);
+            try (final java.io.OutputStream out = new java.io.FileOutputStream(file)) { p.store(out, null); } catch (final java.io.IOException ignored) { }
+        }
+    }
+
     public final class World {
+        public boolean exists() { return mc.level != null && mc.player != null; }
+        public void playSound(final String name, final double volume, final double pitch, final double x, final double y, final double z) {
+            if (mc.level == null) return;
+            final String n = sound(name);
+            final net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.parse(n.contains(":") ? n : "minecraft:" + n);
+            mc.level.playLocalSound(x, y, z, net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id), net.minecraft.sounds.SoundSource.PLAYERS, (float) volume, (float) pitch, false);
+        }
         public List<Entity> getEntities() {
             final List<Entity> out = new ArrayList<>();
             if (mc.level != null) for (final net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) out.add(Entity.of(e));
@@ -1260,8 +1305,8 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
 <script>(function (root) {
     const FINAL = ["setEnabled", "toggle", "getName", "getId", "getDescription", "getCategory", "getSubCategory", "hasSubCategory", "isEnabled", "isVisible", "setVisible", "registerSettings", "addModuleModes", "getModuleModes", "getActiveMode", "getModeSetting", "setModeSetting", "getSuffixGuarded", "isExpanded", "getPropertyIndex", "setPropertyIndex", "setExpanded", "getSettingsList", "onBindingInteraction", "isHandlingEvents", "registerModule", "registerEvent", "getClass", "hashCode", "equals", "toString", "notify", "notifyAll", "wait"];
 
-    const OBJECTS = ["modules", "client", "render", "world", "keybinds", "util", "inventory", "gl"];
-    const MISSING = ["config", "http", "json", "bridge", "network", "tileEntity"];
+    const OBJECTS = ["modules", "client", "render", "world", "keybinds", "util", "inventory", "gl", "config"];
+    const MISSING = ["http", "json", "bridge", "network", "tileEntity"];
 
     function close(m, at) {
         const open = m[at], end = { "(": ")", "{": "}", "[": "]" }[open];
@@ -1441,7 +1486,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
 
     function shimApi(shim) {
         const api = {};
-        const names = { Modules: "modules", Client: "client", Render: "render", World: "world", Keybinds: "keybinds", Util: "util", Inventory: "inventory", Gl: "gl" };
+        const names = { Modules: "modules", Client: "client", Render: "render", World: "world", Keybinds: "keybinds", Util: "util", Inventory: "inventory", Gl: "gl", Config: "config" };
         const re = /public final class (\w+) \{/g;
         let m;
         const heads = [];
@@ -1789,6 +1834,7 @@ code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1
             "    final Util util = new Util();",
             "    final Inventory inventory = new Inventory();",
             "    final Gl gl = new Gl();",
+            "    final Config config = new Config();",
             "",
             body,
             "",
