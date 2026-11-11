@@ -1,0 +1,1957 @@
+<title>Raven to Opal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: header strip, then a two-pane source/output workbench, diagnostics and the event map below */
+:root {
+  --bg: #eef1f0;
+  --panel: #ffffff;
+  --ink: #17201e;
+  --muted: #5a6865;
+  --line: #d3dbd8;
+  --accent: #0f7a63;
+  --accent-ink: #ffffff;
+  --raven: #8a3ffc;
+  --warn: #9a5b00;
+  --warn-bg: #fff4dc;
+  --note-bg: #e6f3ef;
+  --code-bg: #f6f8f7;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101514; --panel: #171e1c; --ink: #e3ebe8; --muted: #93a39f; --line: #2a3532;
+    --accent: #3cc6a2; --accent-ink: #062019; --raven: #b38bff; --warn: #f2b84b; --warn-bg: #2b2210;
+    --note-bg: #14302a; --code-bg: #121816; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101514; --panel: #171e1c; --ink: #e3ebe8; --muted: #93a39f; --line: #2a3532;
+  --accent: #3cc6a2; --accent-ink: #062019; --raven: #b38bff; --warn: #f2b84b; --warn-bg: #2b2210;
+  --note-bg: #14302a; --code-bg: #121816; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(28px, 4vw, 42px); line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h1 .r { color: var(--raven); }
+h1 .o { color: var(--accent); }
+h1 .arrow { color: var(--muted); font-weight: 600; }
+.sub { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 18px; margin: 0; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+input[type=text] {
+  font: 500 15px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; min-width: 0; width: 220px; max-width: 100%;
+}
+button {
+  font: 600 14px var(--body); border-radius: 6px; padding: 9px 14px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+}
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:hover { filter: brightness(1.06); }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .panes { grid-template-columns: 1fr; } }
+.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; min-width: 0; }
+.pane-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.tag { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 4px; }
+.tag.raven { color: var(--raven); border: 1px solid var(--raven); }
+.tag.opal { color: var(--accent); border: 1px solid var(--accent); }
+.file { font: 400 13px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+textarea, pre.out {
+  font: 400 13px/1.55 var(--mono); color: var(--ink); background: var(--code-bg); margin: 0; border: 0;
+  padding: 12px 14px; height: 560px; width: 100%; resize: vertical; tab-size: 4; border-radius: 0 0 8px 8px;
+}
+pre.out { overflow: auto; white-space: pre; }
+.diag { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .diag { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+ul.msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+ul.msgs li { padding: 7px 10px; border-radius: 5px; font-size: 14px; overflow-wrap: anywhere; }
+ul.msgs li.warn { background: var(--warn-bg); color: var(--warn); }
+ul.msgs li.note { background: var(--note-bg); }
+ul.msgs li.ok { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 400 12px var(--mono); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+td code { font: 400 13px var(--mono); }
+td.raven code { color: var(--raven); }
+td.opal code { color: var(--accent); }
+ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+code.inline { font: 400 13px var(--mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.toast { color: var(--accent); font-size: 13px; min-height: 1em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="r">Raven B4</span> <span class="arrow">→</span> <span class="o">Opal</span></h1>
+      <p class="sub">Paste a Raven B4 script and get a single-file Opal extension for Minecraft 26.2. The output bundles a compatibility layer that implements Raven's <code class="inline">client</code>, <code class="inline">modules</code>, <code class="inline">render</code>, <code class="inline">world</code>, <code class="inline">keybinds</code>, <code class="inline">util</code>, <code class="inline">inventory</code> and <code class="inline">gl</code> objects on top of Opal. Text option sliders become mode settings, and <code class="inline">gl</code> drawing runs through Opal's mesh renderer.</p>
+    </div>
+    <div class="bar">
+      <label class="field" for="name">Module name
+        <input type="text" id="name" value="Hurt Hop" spellcheck="false">
+      </label>
+      <button class="primary" id="go">Translate</button>
+    </div>
+  </header>
+
+  <div class="panes">
+    <section class="pane">
+      <div class="pane-head"><span class="tag raven">Raven script</span><span class="file" id="srcinfo">example loaded</span></div>
+      <textarea id="src" spellcheck="false" aria-label="Raven script source"></textarea>
+    </section>
+    <section class="pane">
+      <div class="pane-head">
+        <span class="tag opal">Opal extension</span>
+        <span class="file" id="outfile"></span>
+        <div class="bar"><span class="toast" id="toast"></span><button id="copy">Copy code</button></div>
+      </div>
+      <pre class="out" id="out" tabindex="0" aria-label="Translated Opal extension"></pre>
+    </section>
+  </div>
+
+  <div class="diag">
+    <section class="card">
+      <h2>Check before you load it</h2>
+      <ul class="msgs" id="msgs"></ul>
+      <div class="chips" id="events"></div>
+    </section>
+    <section class="card">
+      <h2>Install</h2>
+      <ol class="steps">
+        <li>Copy the code and save it as <code class="inline" id="fname">RavenScript.java</code> in <code class="inline">.minecraft/opal/extensions/</code>. The file name must match the class name.</li>
+        <li>In game, type <code class="inline">.extension reload</code> in chat, or restart.</li>
+        <li>Enable the module under <b>Extensions</b> in the click GUI. If it doesn't appear, look for <code class="inline">Failed to load extension</code> in <code class="inline">logs/latest.log</code>.</li>
+      </ol>
+      <p class="sub" style="margin:0">Extensions run with full access to your computer. Only translate and load scripts you trust.</p>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>How Raven events map to Opal</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Raven callback</th><th>Opal event</th><th>Behaviour</th></tr></thead>
+        <tbody id="map"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<script id="shim" type="text/plain">
+    static final int[] KEYS = {
+        1, 256, 2, 49, 3, 50, 4, 51, 5, 52, 6, 53, 7, 54, 8, 55, 9, 56, 10, 57, 11, 48, 12, 45, 13, 61, 14, 259, 15, 258,
+        16, 81, 17, 87, 18, 69, 19, 82, 20, 84, 21, 89, 22, 85, 23, 73, 24, 79, 25, 80, 26, 91, 27, 93, 28, 257, 29, 341,
+        30, 65, 31, 83, 32, 68, 33, 70, 34, 71, 35, 72, 36, 74, 37, 75, 38, 76, 39, 59, 40, 39, 41, 96, 42, 340, 43, 92,
+        44, 90, 45, 88, 46, 67, 47, 86, 48, 66, 49, 78, 50, 77, 51, 44, 52, 46, 53, 47, 54, 344, 56, 342, 57, 32, 58, 280,
+        59, 290, 60, 291, 61, 292, 62, 293, 63, 294, 64, 295, 65, 296, 66, 297, 67, 298, 68, 299, 87, 300, 88, 301,
+        157, 345, 184, 346, 199, 268, 200, 265, 201, 266, 203, 263, 205, 262, 207, 269, 208, 264, 209, 267, 210, 260, 211, 261
+    };
+
+    static int glfw(final int key) {
+        for (int i = 0; i < KEYS.length; i += 2) if (KEYS[i] == key) return KEYS[i + 1];
+        return -1;
+    }
+
+    static int lwjgl(final int key) {
+        for (int i = 0; i < KEYS.length; i += 2) if (KEYS[i + 1] == key) return KEYS[i];
+        return 0;
+    }
+
+    static final String[] SOUNDS = {
+        "random.orb", "entity.experience_orb.pickup",
+        "random.levelup", "entity.player.levelup",
+        "random.click", "ui.button.click",
+        "random.pop", "entity.item.pickup",
+        "random.successful_hit", "entity.arrow.hit_player",
+        "random.bow", "entity.arrow.shoot",
+        "random.bowhit", "entity.arrow.hit",
+        "random.explode", "entity.generic.explode",
+        "random.anvil_land", "block.anvil.land",
+        "random.anvil_use", "block.anvil.use",
+        "random.anvil_break", "block.anvil.destroy",
+        "random.break", "entity.item.break",
+        "random.chestopen", "block.chest.open",
+        "random.chestclosed", "block.chest.close",
+        "random.door_open", "block.wooden_door.open",
+        "random.door_close", "block.wooden_door.close",
+        "random.fizz", "block.fire.extinguish",
+        "random.drink", "entity.generic.drink",
+        "random.eat", "entity.generic.eat",
+        "random.burp", "entity.player.burp",
+        "random.hurt", "entity.player.hurt",
+        "random.splash", "entity.generic.splash",
+        "random.swim", "entity.generic.swim",
+        "random.wood_click", "block.wooden_button.click_on",
+        "random.fuse", "entity.tnt.primed",
+        "random.glass", "block.glass.break",
+        "random.classic_hurt", "entity.player.hurt",
+        "random.toast", "entity.player.levelup",
+        "game.player.hurt", "entity.player.hurt",
+        "game.player.die", "entity.player.death",
+        "game.player.hurt.fall.big", "entity.player.big_fall",
+        "game.player.hurt.fall.small", "entity.player.small_fall",
+        "game.player.swim", "entity.player.swim",
+        "game.player.swim.splash", "entity.player.splash",
+        "game.tnt.primed", "entity.tnt.primed",
+        "note.harp", "block.note_block.harp",
+        "note.bass", "block.note_block.bass",
+        "note.bassattack", "block.note_block.bass",
+        "note.bd", "block.note_block.basedrum",
+        "note.snare", "block.note_block.snare",
+        "note.hat", "block.note_block.hat",
+        "note.pling", "block.note_block.pling",
+        "mob.endermen.portal", "entity.enderman.teleport",
+        "mob.endermen.hit", "entity.enderman.hurt",
+        "mob.endermen.death", "entity.enderman.death",
+        "mob.endermen.scream", "entity.enderman.scream",
+        "mob.endermen.stare", "entity.enderman.stare",
+        "mob.cat.meow", "entity.cat.ambient",
+        "mob.cat.purr", "entity.cat.purr",
+        "mob.cat.hiss", "entity.cat.hiss",
+        "mob.wolf.bark", "entity.wolf.ambient",
+        "mob.wolf.growl", "entity.wolf.growl",
+        "mob.wolf.howl", "entity.wolf.howl",
+        "mob.chicken.plop", "entity.chicken.egg",
+        "mob.chicken.say", "entity.chicken.ambient",
+        "mob.cow.say", "entity.cow.ambient",
+        "mob.pig.say", "entity.pig.ambient",
+        "mob.sheep.say", "entity.sheep.ambient",
+        "mob.villager.yes", "entity.villager.yes",
+        "mob.villager.no", "entity.villager.no",
+        "mob.villager.idle", "entity.villager.ambient",
+        "mob.villager.haggle", "entity.villager.trade",
+        "mob.zombie.say", "entity.zombie.ambient",
+        "mob.zombie.hurt", "entity.zombie.hurt",
+        "mob.zombie.death", "entity.zombie.death",
+        "mob.zombie.woodbreak", "entity.zombie.break_wooden_door",
+        "mob.zombie.wood", "entity.zombie.attack_wooden_door",
+        "mob.skeleton.say", "entity.skeleton.ambient",
+        "mob.skeleton.hurt", "entity.skeleton.hurt",
+        "mob.skeleton.death", "entity.skeleton.death",
+        "mob.creeper.say", "entity.creeper.hurt",
+        "mob.creeper.death", "entity.creeper.death",
+        "mob.spider.say", "entity.spider.ambient",
+        "mob.spider.death", "entity.spider.death",
+        "mob.blaze.hit", "entity.blaze.hurt",
+        "mob.blaze.death", "entity.blaze.death",
+        "mob.blaze.breathe", "entity.blaze.ambient",
+        "mob.ghast.scream", "entity.ghast.scream",
+        "mob.ghast.fireball", "entity.ghast.shoot",
+        "mob.ghast.charge", "entity.ghast.warn",
+        "mob.slime.big", "entity.slime.squish",
+        "mob.slime.small", "entity.slime.squish_small",
+        "mob.slime.attack", "entity.slime.attack",
+        "mob.irongolem.hit", "entity.iron_golem.hurt",
+        "mob.irongolem.death", "entity.iron_golem.death",
+        "mob.irongolem.throw", "entity.iron_golem.attack",
+        "mob.wither.spawn", "entity.wither.spawn",
+        "mob.wither.shoot", "entity.wither.shoot",
+        "mob.wither.death", "entity.wither.death",
+        "mob.wither.hurt", "entity.wither.hurt",
+        "mob.enderdragon.growl", "entity.ender_dragon.growl",
+        "mob.enderdragon.wings", "entity.ender_dragon.flap",
+        "mob.enderdragon.end", "entity.ender_dragon.death",
+        "mob.enderdragon.hit", "entity.ender_dragon.hurt",
+        "mob.guardian.curse", "entity.elder_guardian.curse",
+        "mob.bat.takeoff", "entity.bat.takeoff",
+        "mob.horse.gallop", "entity.horse.gallop",
+        "mob.horse.idle", "entity.horse.ambient",
+        "mob.silverfish.say", "entity.silverfish.ambient",
+        "mob.magmacube.big", "entity.magma_cube.squish",
+        "mob.witch.idle", "entity.witch.ambient",
+        "fireworks.blast", "entity.firework_rocket.blast",
+        "fireworks.blast_far", "entity.firework_rocket.blast_far",
+        "fireworks.largeBlast", "entity.firework_rocket.large_blast",
+        "fireworks.largeBlast_far", "entity.firework_rocket.large_blast_far",
+        "fireworks.launch", "entity.firework_rocket.launch",
+        "fireworks.twinkle", "entity.firework_rocket.twinkle",
+        "fireworks.twinkle_far", "entity.firework_rocket.twinkle_far",
+        "ambient.weather.thunder", "entity.lightning_bolt.thunder",
+        "ambient.weather.rain", "weather.rain",
+        "ambient.cave.cave", "ambient.cave",
+        "liquid.splash", "entity.generic.splash",
+        "liquid.water", "block.water.ambient",
+        "liquid.lava", "block.lava.ambient",
+        "liquid.lavapop", "block.lava.pop",
+        "liquid.swim", "entity.generic.swim",
+        "fire.fire", "block.fire.ambient",
+        "fire.ignite", "item.flintandsteel.use",
+        "portal.portal", "block.portal.ambient",
+        "portal.travel", "block.portal.travel",
+        "portal.trigger", "block.portal.trigger",
+        "tile.piston.out", "block.piston.extend",
+        "tile.piston.in", "block.piston.contract",
+        "minecart.base", "entity.minecart.riding",
+        "minecart.inside", "entity.minecart.inside",
+        "dig.stone", "block.stone.break",
+        "dig.wood", "block.wood.break",
+        "dig.gravel", "block.gravel.break",
+        "dig.grass", "block.grass.break",
+        "dig.sand", "block.sand.break",
+        "dig.snow", "block.snow.break",
+        "dig.cloth", "block.wool.break",
+        "dig.glass", "block.glass.break",
+        "step.stone", "block.stone.step",
+        "step.wood", "block.wood.step",
+        "step.gravel", "block.gravel.step",
+        "step.grass", "block.grass.step",
+        "step.sand", "block.sand.step",
+        "step.snow", "block.snow.step",
+        "step.cloth", "block.wool.step",
+        "step.ladder", "block.ladder.step",
+        "gui.button.press", "ui.button.click",
+        "records.13", "music_disc.13",
+        "records.cat", "music_disc.cat"
+    };
+
+    static String sound(final String name) {
+        final String n = name.startsWith("minecraft:") ? name.substring(10) : name;
+        for (int i = 0; i < SOUNDS.length; i += 2) if (SOUNDS[i].equalsIgnoreCase(n)) return SOUNDS[i + 1];
+        return name;
+    }
+
+    String getScriptName() {
+        return getName();
+    }
+
+    static net.minecraft.world.phys.Vec3 mcv(final Vec3 v) {
+        return new net.minecraft.world.phys.Vec3(v.x, v.y, v.z);
+    }
+
+    static wtf.opal.utility.render.Color col(final int c) {
+        return new wtf.opal.utility.render.Color(c);
+    }
+
+    static String norm(final String s) {
+        return s.toLowerCase(Locale.ROOT).replace(" ", "").replace("_", "");
+    }
+
+    static wtf.opal.client.feature.module.Module findModule(final String name) {
+        final String n = norm(name);
+        for (final wtf.opal.client.feature.module.Module m : wtf.opal.client.OpalClient.getInstance().getModuleRepository().getModules()) {
+            if (norm(m.getName()).equals(n)) return m;
+        }
+        return null;
+    }
+
+    static wtf.opal.client.feature.module.setting.Setting<?> findSetting(final String module, final String name) {
+        final wtf.opal.client.feature.module.Module m = findModule(module);
+        if (m == null) return null;
+        final String n = norm(name);
+        for (final wtf.opal.client.feature.module.setting.Setting<?> s : m.getSettingsList()) {
+            if (norm(s.getName()).equals(n)) return s;
+        }
+        return null;
+    }
+
+    public static class Vec3 {
+        public double x, y, z;
+
+        public Vec3(final double x, final double y, final double z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        static Vec3 of(final net.minecraft.world.phys.Vec3 v) {
+            return v == null ? null : new Vec3(v.x, v.y, v.z);
+        }
+
+        public Vec3 offset(final Vec3 o) { return new Vec3(x + o.x, y + o.y, z + o.z); }
+        public Vec3 offset(final double a, final double b, final double c) { return new Vec3(x + a, y + b, z + c); }
+        public Vec3 translate(final Vec3 o) { return offset(o); }
+        public Vec3 translate(final double a, final double b, final double c) { return offset(a, b, c); }
+        public Vec3 floor() { return new Vec3(Math.floor(x), Math.floor(y), Math.floor(z)); }
+        public Vec3 ceil() { return new Vec3(Math.ceil(x), Math.ceil(y), Math.ceil(z)); }
+        public Vec3 inverse() { return new Vec3(-x, -y, -z); }
+        public double distanceToSq(final Vec3 o) { final double a = x - o.x, b = y - o.y, c = z - o.z; return a * a + b * b + c * c; }
+        public double distanceTo(final Vec3 o) { return Math.sqrt(distanceToSq(o)); }
+        public boolean equals(final Vec3 o) { return o != null && x == o.x && y == o.y && z == o.z; }
+        @Override public String toString() { return x + ", " + y + ", " + z; }
+    }
+
+    public static class ItemStack {
+        public final net.minecraft.world.item.ItemStack raw;
+        public String type, name, displayName;
+        public int stackSize, maxStackSize, durability, maxDurability, meta;
+        public boolean isBlock;
+
+        ItemStack(final net.minecraft.world.item.ItemStack s) {
+            raw = s;
+            type = s.getItem().getClass().getSimpleName();
+            name = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem()).getPath();
+            displayName = s.getHoverName().getString();
+            stackSize = s.getCount();
+            maxStackSize = s.getMaxStackSize();
+            maxDurability = s.getMaxDamage();
+            durability = maxDurability - s.getDamageValue();
+            isBlock = s.getItem() instanceof net.minecraft.world.item.BlockItem;
+        }
+
+        static ItemStack of(final net.minecraft.world.item.ItemStack s) {
+            return s == null || s.isEmpty() ? null : new ItemStack(s);
+        }
+    }
+
+    public static class Block {
+        public String type, name;
+        public boolean interactable;
+        public int variant;
+        public double height, width, length, x, y, z;
+
+        Block(final net.minecraft.world.level.block.state.BlockState s, final net.minecraft.core.BlockPos p) {
+            type = s.getBlock().getClass().getSimpleName();
+            name = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath();
+            x = p.getX();
+            y = p.getY();
+            z = p.getZ();
+            width = height = length = s.isAir() ? 0 : 1;
+        }
+    }
+
+    public static class MovementInput {
+        public float forward, strafe;
+        public boolean jump, sneak;
+    }
+
+    public static class PlayerState {
+        public double x, y, z;
+        public float yaw, pitch;
+        public boolean onGround, isSprinting, isSneaking;
+    }
+
+    public static class Entity {
+        public final net.minecraft.world.entity.Entity raw;
+        public final int entityId;
+        public final String type;
+        public final boolean isUser;
+
+        Entity(final net.minecraft.world.entity.Entity e) {
+            raw = e;
+            entityId = e.getId();
+            type = e.getClass().getSimpleName();
+            isUser = e == mc.player;
+        }
+
+        static Entity of(final net.minecraft.world.entity.Entity e) {
+            return e == null ? null : new Entity(e);
+        }
+
+        net.minecraft.world.entity.LivingEntity living() {
+            return raw instanceof net.minecraft.world.entity.LivingEntity l ? l : null;
+        }
+
+        net.minecraft.world.entity.player.Player player() {
+            return raw instanceof net.minecraft.world.entity.player.Player p ? p : null;
+        }
+
+        public Vec3 getPosition() { return Vec3.of(raw.position()); }
+        public Vec3 getLastPosition() { return new Vec3(raw.xo, raw.yo, raw.zo); }
+        public Vec3 getServerPosition() { return getPosition(); }
+        public Vec3 getBlockPosition() { final net.minecraft.core.BlockPos p = raw.blockPosition(); return new Vec3(p.getX(), p.getY(), p.getZ()); }
+        public String getName() { return raw.getName().getString(); }
+        public String getDisplayName() { return raw.getDisplayName().getString(); }
+        public float getYaw() { return raw.getYRot(); }
+        public float getPitch() { return raw.getXRot(); }
+        public float getPrevYaw() { return raw.yRotO; }
+        public float getPrevPitch() { return raw.xRotO; }
+        public void setYaw(final float v) { raw.setYRot(v); }
+        public void setPitch(final float v) { raw.setXRot(v); }
+        public void setPosition(final Vec3 v) { raw.setPos(v.x, v.y, v.z); }
+        public void setPosition(final double a, final double b, final double c) { raw.setPos(a, b, c); }
+        public float getHeight() { return raw.getBbHeight(); }
+        public float getWidth() { return raw.getBbWidth(); }
+        public float getEyeHeight() { return raw.getEyeHeight(); }
+        public float getFallDistance() { return (float) raw.fallDistance; }
+        public int getTicksExisted() { return raw.tickCount; }
+        public int getAir() { return raw.getAirSupply(); }
+        public float getHealth() { return living() == null ? 0 : living().getHealth(); }
+        public float getMaxHealth() { return living() == null ? 0 : living().getMaxHealth(); }
+        public float getAbsorption() { return living() == null ? 0 : living().getAbsorptionAmount(); }
+        public int getHurtTime() { return living() == null ? 0 : living().hurtTime; }
+        public int getMaxHurtTime() { return living() == null ? 0 : living().hurtDuration; }
+        public int getSwingProgress() { return living() == null ? 0 : living().swingTime; }
+        public ItemStack getHeldItem() { return living() == null ? null : ItemStack.of(living().getMainHandItem()); }
+        public ItemStack getArmorInSlot(final int slot) {
+            if (living() == null) return null;
+            final net.minecraft.world.entity.EquipmentSlot[] s = {net.minecraft.world.entity.EquipmentSlot.FEET, net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.HEAD};
+            return slot < 0 || slot > 3 ? null : ItemStack.of(living().getItemBySlot(s[slot]));
+        }
+        public int getHunger() { return player() == null ? 0 : player().getFoodData().getFoodLevel(); }
+        public float getSaturation() { return player() == null ? 0 : player().getFoodData().getSaturationLevel(); }
+        public int getExperienceLevel() { return player() == null ? 0 : player().experienceLevel; }
+        public float getExperience() { return player() == null ? 0 : player().experienceProgress; }
+        public double getSpeed() { final net.minecraft.world.phys.Vec3 d = raw.getDeltaMovement(); return Math.hypot(d.x, d.z); }
+        public double getBPS() { return Math.hypot(raw.getX() - raw.xo, raw.getZ() - raw.zo) * 20; }
+        public String getFacing() { return raw.getDirection().getName(); }
+        public Entity getRidingEntity() { return of(raw.getVehicle()); }
+        public Entity getRiddenByEntity() { return of(raw.getFirstPassenger()); }
+        public double distanceToGround() {
+            for (int i = 0; i < 256; i++) {
+                final net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.containing(raw.getX(), raw.getY() - i - 0.01, raw.getZ());
+                if (!raw.level().getBlockState(p).isAir()) return Math.max(0, raw.getY() - (p.getY() + 1));
+            }
+            return -1;
+        }
+        public boolean onGround() { return raw.onGround(); }
+        public boolean isSneaking() { return raw.isShiftKeyDown(); }
+        public boolean isSprinting() { return raw.isSprinting(); }
+        public boolean isInvisible() { return raw.isInvisible(); }
+        public boolean isBurning() { return raw.isOnFire(); }
+        public boolean isInWater() { return raw.isInWater(); }
+        public boolean isInLava() { return raw.isInLava(); }
+        public boolean isInLiquid() { return raw.isInWater() || raw.isInLava(); }
+        public boolean isRiding() { return raw.isPassenger(); }
+        public boolean isDead() { return !raw.isAlive(); }
+        public boolean isCollided() { return raw.horizontalCollision || raw.verticalCollision; }
+        public boolean isCollidedHorizontally() { return raw.horizontalCollision; }
+        public boolean isCollidedVertically() { return raw.verticalCollision; }
+        public boolean isSleeping() { return living() != null && living().isSleeping(); }
+        public boolean isUsingItem() { return living() != null && living().isUsingItem(); }
+        public boolean isConsuming() { return isUsingItem(); }
+        public boolean isOnLadder() { return living() != null && living().onClimbable(); }
+        public boolean isCreative() { return player() != null && player().isCreative(); }
+        public boolean isHoldingBlock() { final ItemStack s = getHeldItem(); return s != null && s.isBlock; }
+        public boolean isHoldingWeapon() { final ItemStack s = getHeldItem(); return s != null && (s.name.endsWith("_sword") || s.name.endsWith("_axe")); }
+        public boolean isOnEdge() { return raw.onGround() && raw.level().getBlockState(net.minecraft.core.BlockPos.containing(raw.getX(), raw.getY() - 0.5, raw.getZ())).isAir(); }
+        @Override public boolean equals(final Object o) { return o instanceof Entity e && e.raw == raw; }
+        @Override public int hashCode() { return entityId; }
+    }
+
+    static final String[] PACKETS = {
+        "ServerboundKeepAlivePacket", "C00PacketKeepAlive", "ServerboundChatPacket", "C01PacketChatMessage", "ServerboundChatCommandPacket", "C01PacketChatMessage",
+        "ServerboundAttackPacket", "C02PacketUseEntity", "ServerboundInteractPacket", "C02PacketUseEntity", "StatusOnly", "C03PacketPlayer", "Pos", "C04PacketPlayerPosition",
+        "Rot", "C05PacketPlayerLook", "PosRot", "C06PacketPlayerPosLook", "ServerboundPlayerActionPacket", "C07PacketPlayerDigging",
+        "ServerboundUseItemOnPacket", "C08PacketPlayerBlockPlacement", "ServerboundUseItemPacket", "C08PacketPlayerBlockPlacement", "ServerboundSetCarriedItemPacket", "C09PacketHeldItemChange",
+        "ServerboundSwingPacket", "C0APacketAnimation", "ServerboundPlayerCommandPacket", "C0BPacketEntityAction", "ServerboundPlayerInputPacket", "C0BPacketEntityAction",
+        "ServerboundContainerClosePacket", "C0DPacketCloseWindow", "ServerboundContainerClickPacket", "C0EPacketClickWindow", "ServerboundPongPacket", "C0FPacketConfirmTransaction",
+        "ServerboundPlayerAbilitiesPacket", "C13PacketPlayerAbilities", "ServerboundClientCommandPacket", "C16PacketClientStatus",
+        "ClientboundKeepAlivePacket", "S00PacketKeepAlive", "ClientboundLoginPacket", "S01PacketJoinGame", "ClientboundSystemChatPacket", "S02PacketChat", "ClientboundPlayerChatPacket", "S02PacketChat",
+        "ClientboundSetTimePacket", "S03PacketTimeUpdate", "ClientboundSetHealthPacket", "S06PacketUpdateHealth", "ClientboundRespawnPacket", "S07PacketRespawn",
+        "ClientboundPlayerPositionPacket", "S08PacketPlayerPosLook", "ClientboundSetHeldSlotPacket", "S09PacketHeldItemChange", "ClientboundAnimatePacket", "S0BPacketAnimation",
+        "ClientboundAddEntityPacket", "S0EPacketSpawnObject", "ClientboundSetEntityMotionPacket", "S12PacketEntityVelocity", "ClientboundRemoveEntitiesPacket", "S13PacketDestroyEntities",
+        "ClientboundTeleportEntityPacket", "S18PacketEntityTeleport", "ClientboundEntityPositionSyncPacket", "S18PacketEntityTeleport", "ClientboundEntityEventPacket", "S19PacketEntityStatus",
+        "ClientboundBlockUpdatePacket", "S23PacketBlockChange", "ClientboundBlockDestructionPacket", "S25PacketBlockBreakAnim", "ClientboundExplodePacket", "S27PacketExplosion",
+        "ClientboundSoundPacket", "S29PacketSoundEffect", "ClientboundLevelParticlesPacket", "S2APacketParticles", "ClientboundGameEventPacket", "S2BPacketChangeGameState",
+        "ClientboundOpenScreenPacket", "S2DPacketOpenWindow", "ClientboundContainerClosePacket", "S2EPacketCloseWindow", "ClientboundContainerSetSlotPacket", "S2FPacketSetSlot",
+        "ClientboundContainerSetContentPacket", "S30PacketWindowItems", "ClientboundPingPacket", "S32PacketConfirmTransaction", "ClientboundPlayerAbilitiesPacket", "S39PacketPlayerAbilities",
+        "ClientboundDisconnectPacket", "S40PacketDisconnect", "ClientboundSetTitleTextPacket", "S45PacketTitle", "ClientboundSetSubtitleTextPacket", "S45PacketTitle",
+        "ClientboundTabListPacket", "S47PacketPlayerListHeaderFooter"
+    };
+
+    static String legacy(final net.minecraft.network.protocol.Packet<?> p) {
+        final String n = p.getClass().getSimpleName();
+        for (int i = 0; i < PACKETS.length; i += 2) if (PACKETS[i].equals(n)) return PACKETS[i + 1];
+        return n;
+    }
+
+    public static class CPacket {
+        public final net.minecraft.network.protocol.Packet<?> raw;
+        public String name;
+
+        CPacket(final net.minecraft.network.protocol.Packet<?> p, final String n) {
+            raw = p;
+            name = n;
+        }
+
+        static CPacket wrap(final net.minecraft.network.protocol.Packet<?> p) {
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundMovePlayerPacket m) {
+                final C03 c = new C03(m.isOnGround());
+                c.raw2 = m;
+                c.name = legacy(m);
+                c.rotating = m.hasRotation();
+                c.moving = m.hasPosition();
+                if (m.hasPosition()) c.position = new Vec3(m.getX(0), m.getY(0), m.getZ(0));
+                c.x = m.getX(0);
+                c.y = m.getY(0);
+                c.z = m.getZ(0);
+                c.yaw = m.getYRot(0);
+                c.pitch = m.getXRot(0);
+                return c;
+            }
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundChatPacket m) return new C01(m.message(), p);
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundSwingPacket) return new C0A(p);
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundAttackPacket m) {
+                final C02 c = new C02(mc.level == null ? null : Entity.of(mc.level.getEntity(m.entityId())), "ATTACK", null);
+                c.id = m.entityId();
+                return c;
+            }
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundInteractPacket m) {
+                final C02 c = new C02(mc.level == null ? null : Entity.of(mc.level.getEntity(m.entityId())), m.location() == null ? "INTERACT" : "INTERACT_AT", Vec3.of(m.location()));
+                c.id = m.entityId();
+                return c;
+            }
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundUseItemOnPacket m) {
+                final net.minecraft.world.phys.BlockHitResult h = m.getHitResult();
+                final net.minecraft.core.BlockPos b = h.getBlockPos();
+                final net.minecraft.world.phys.Vec3 l = h.getLocation();
+                return new C08(mc.player == null ? null : ItemStack.of(mc.player.getItemInHand(m.getHand())), new Vec3(b.getX(), b.getY(), b.getZ()), h.getDirection().get3DDataValue(), new Vec3(l.x - b.getX(), l.y - b.getY(), l.z - b.getZ()));
+            }
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundUseItemPacket m) {
+                return new C08(mc.player == null ? null : ItemStack.of(mc.player.getItemInHand(m.getHand())), new Vec3(-1, -1, -1), 255, new Vec3(0, 0, 0));
+            }
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket m) {
+                final String a = m.getAction().name();
+                return new C0B(a.equals("START_RIDING_JUMP") ? "RIDING_JUMP" : a, m.getData());
+            }
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundPlayerInputPacket m) {
+                return new C0B(m.input().shift() ? "START_SNEAKING" : "STOP_SNEAKING", 0);
+            }
+            if (p instanceof net.minecraft.network.protocol.game.ServerboundPlayerActionPacket m) {
+                final net.minecraft.core.BlockPos b = m.getPos();
+                final C07 c = new C07(new Vec3(b.getX(), b.getY(), b.getZ()), m.getAction().name(), m.getDirection().name());
+                c.original = m;
+                return c;
+            }
+            return new CPacket(p, legacy(p));
+        }
+
+        net.minecraft.network.protocol.Packet<?> build() {
+            return raw;
+        }
+    }
+
+    public static class C01 extends CPacket {
+        public String message;
+
+        public C01(final String message) { this(message, null); }
+
+        C01(final String message, final net.minecraft.network.protocol.Packet<?> p) {
+            super(p, "C01PacketChatMessage");
+            this.message = message;
+        }
+    }
+
+    public static class C03 extends CPacket {
+        net.minecraft.network.protocol.game.ServerboundMovePlayerPacket raw2;
+        public double x, y, z;
+        public Vec3 position;
+        public float yaw, pitch;
+        public boolean ground;
+        boolean rotating;
+        public boolean moving;
+
+        public C03(final boolean ground) {
+            super(null, "C03PacketPlayer");
+            this.ground = ground;
+        }
+
+        public C03(final Vec3 position, final boolean ground) {
+            this(ground);
+            name = "C04PacketPlayerPosition";
+            this.position = position;
+            moving = true;
+        }
+
+        public C03(final float yaw, final float pitch, final boolean ground) {
+            this(ground);
+            name = "C05PacketPlayerLook";
+            this.yaw = yaw;
+            this.pitch = pitch;
+            rotating = true;
+        }
+
+        public C03(final Vec3 position, final float yaw, final float pitch, final boolean ground) {
+            this(yaw, pitch, ground);
+            name = "C06PacketPlayerPosLook";
+            this.position = position;
+            moving = true;
+        }
+
+        @Override
+        net.minecraft.network.protocol.Packet<?> build() {
+            final boolean h = mc.player != null && mc.player.horizontalCollision;
+            if (position != null && rotating) return new net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(position.x, position.y, position.z, yaw, pitch, ground, h);
+            if (position != null) return new net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.Pos(position.x, position.y, position.z, ground, h);
+            if (rotating) return new net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.Rot(yaw, pitch, ground, h);
+            return new net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.StatusOnly(ground, h);
+        }
+    }
+
+    public static class C02 extends CPacket {
+        int id = -1;
+        public Entity entity;
+        public String action;
+        public Vec3 hitVec;
+
+        public C02(final Entity entity, final String action, final Vec3 hitVec) {
+            super(null, "C02PacketUseEntity");
+            this.entity = entity;
+            this.action = action;
+            this.hitVec = hitVec;
+        }
+
+        @Override
+        net.minecraft.network.protocol.Packet<?> build() {
+            final int target = entity != null ? entity.entityId : id;
+            if ("ATTACK".equalsIgnoreCase(action)) return new net.minecraft.network.protocol.game.ServerboundAttackPacket(target);
+            final net.minecraft.world.phys.Vec3 at = hitVec == null ? net.minecraft.world.phys.Vec3.ZERO : mcv(hitVec);
+            return new net.minecraft.network.protocol.game.ServerboundInteractPacket(target, net.minecraft.world.InteractionHand.MAIN_HAND, at, mc.player != null && mc.player.isShiftKeyDown());
+        }
+    }
+
+    public static class C08 extends CPacket {
+        public ItemStack itemStack;
+        public Vec3 position, offset;
+        public int direction;
+
+        public C08(final ItemStack itemStack, final Vec3 position, final int direction, final Vec3 offset) {
+            super(null, "C08PacketPlayerBlockPlacement");
+            this.itemStack = itemStack;
+            this.position = position;
+            this.direction = direction;
+            this.offset = offset;
+        }
+
+        @Override
+        net.minecraft.network.protocol.Packet<?> build() {
+            if (position == null || direction < 0 || direction > 5) {
+                final float yaw = mc.player == null ? 0 : mc.player.getYRot(), pitch = mc.player == null ? 0 : mc.player.getXRot();
+                return new net.minecraft.network.protocol.game.ServerboundUseItemPacket(net.minecraft.world.InteractionHand.MAIN_HAND, 0, yaw, pitch);
+            }
+            final net.minecraft.core.BlockPos b = net.minecraft.core.BlockPos.containing(position.x, position.y, position.z);
+            final Vec3 o = offset == null ? new Vec3(0.5, 0.5, 0.5) : offset;
+            final net.minecraft.world.phys.BlockHitResult h = new net.minecraft.world.phys.BlockHitResult(new net.minecraft.world.phys.Vec3(b.getX() + o.x, b.getY() + o.y, b.getZ() + o.z), net.minecraft.core.Direction.from3DDataValue(direction), b, false);
+            return new net.minecraft.network.protocol.game.ServerboundUseItemOnPacket(net.minecraft.world.InteractionHand.MAIN_HAND, h, 0);
+        }
+    }
+
+    public static class C0B extends CPacket {
+        public String action;
+        public int horsePower;
+
+        public C0B(final String action, final int horsePower) {
+            super(null, "C0BPacketEntityAction");
+            this.action = action;
+            this.horsePower = horsePower;
+        }
+
+        @Override
+        net.minecraft.network.protocol.Packet<?> build() {
+            final String a = action.toUpperCase(Locale.ROOT);
+            if (a.equals("START_SNEAKING") || a.equals("STOP_SNEAKING")) {
+                final net.minecraft.client.Options o = mc.options;
+                return new net.minecraft.network.protocol.game.ServerboundPlayerInputPacket(new net.minecraft.world.entity.player.Input(o.keyUp.isDown(), o.keyDown.isDown(), o.keyLeft.isDown(), o.keyRight.isDown(), o.keyJump.isDown(), a.equals("START_SNEAKING"), mc.player != null && mc.player.isSprinting()));
+            }
+            final net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action act = net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.valueOf(a.equals("RIDING_JUMP") ? "START_RIDING_JUMP" : a);
+            return new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(mc.player, act, horsePower);
+        }
+    }
+
+    public static class C07 extends CPacket {
+        net.minecraft.network.protocol.game.ServerboundPlayerActionPacket original;
+        public Vec3 position;
+        public String status, facing;
+
+        public C07(final Vec3 position, final String status, final String facing) {
+            super(null, "C07PacketPlayerDigging");
+            this.position = position;
+            this.status = status;
+            this.facing = facing;
+        }
+
+        @Override
+        net.minecraft.network.protocol.Packet<?> build() {
+            final net.minecraft.core.BlockPos pos = position == null ? net.minecraft.core.BlockPos.ZERO : net.minecraft.core.BlockPos.containing(position.x, position.y, position.z);
+            final net.minecraft.core.Direction dir = facing == null ? net.minecraft.core.Direction.DOWN : net.minecraft.core.Direction.valueOf(facing.toUpperCase(Locale.ROOT));
+            return new net.minecraft.network.protocol.game.ServerboundPlayerActionPacket(net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.valueOf(status.toUpperCase(Locale.ROOT)), pos, dir);
+        }
+    }
+
+    public static class C0A extends CPacket {
+        public C0A() { this(null); }
+
+        C0A(final net.minecraft.network.protocol.Packet<?> p) { super(p, "C0APacketAnimation"); }
+
+        @Override
+        net.minecraft.network.protocol.Packet<?> build() {
+            return new net.minecraft.network.protocol.game.ServerboundSwingPacket(net.minecraft.world.InteractionHand.MAIN_HAND);
+        }
+    }
+
+    public static class SPacket {
+        public final net.minecraft.network.protocol.Packet<?> raw;
+        public String name;
+
+        SPacket(final net.minecraft.network.protocol.Packet<?> p) {
+            raw = p;
+            name = p == null ? "" : legacy(p);
+        }
+
+        static SPacket wrap(final net.minecraft.network.protocol.Packet<?> p) {
+            if (p instanceof net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket m) {
+                final net.minecraft.core.BlockPos b = m.getPos();
+                return new S23(new Vec3(b.getX(), b.getY(), b.getZ()), new Block(m.getBlockState(), b));
+            }
+            return new SPacket(p);
+        }
+    }
+
+    public static class S23 extends SPacket {
+        public Vec3 position;
+        public Block block;
+
+        public S23(final Vec3 position, final Block block) {
+            super(null);
+            name = "S23PacketBlockChange";
+            this.position = position;
+            this.block = block;
+        }
+    }
+
+    public final class Modules {
+        public void registerButton(final String name, final boolean value) { registerSettings(new BooleanSetting(name, value)); }
+        public void registerButton(final String group, final String name, final boolean value) { registerButton(name, value); }
+        public void registerSlider(final String name, final String suffix, final double value, final double min, final double max, final double step) { registerSettings(new NumberSetting(name, suffix, value, min, max, step)); }
+        public void registerSlider(final String group, final String name, final String suffix, final double value, final double min, final double max, final double step) { registerSlider(name, suffix, value, min, max, step); }
+        public void registerSlider(final String name, final String suffix, final int value, final String[] options) { registerSettings(new NumberSetting(name, suffix, value, 0, Math.max(1, options.length - 1), 1)); }
+        public void registerSlider(final String group, final String name, final String suffix, final int value, final String[] options) { registerSlider(name, suffix, value, options); }
+        public void registerKey(final String name, final int key) { registerSettings(key <= 0 ? new BindSetting(name) : new BindSetting(name, glfw(key))); }
+        public void registerKey(final String group, final String name, final int key) { registerKey(name, key); }
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public void registerMode(final String name, final Enum<?> value) { registerSettings(new wtf.opal.client.feature.module.setting.impl.mode.ModeSetting(name, (Enum) value)); }
+        public void registerGroup(final String group) { }
+        public void registerDescription(final String description) { }
+        public void enable(final String name) { final wtf.opal.client.feature.module.Module m = findModule(name); if (m != null) m.setEnabled(true); }
+        public void disable(final String name) { final wtf.opal.client.feature.module.Module m = findModule(name); if (m != null) m.setEnabled(false); }
+        public boolean isEnabled(final String name) { final wtf.opal.client.feature.module.Module m = findModule(name); return m != null && m.isEnabled(); }
+        public boolean isHidden(final String name) { final wtf.opal.client.feature.module.Module m = findModule(name); return m != null && !m.isVisible(); }
+        public boolean getButton(final String module, final String name) { return findSetting(module, name) instanceof BooleanSetting b && b.getValue(); }
+        public void setButton(final String module, final String name, final boolean value) { if (findSetting(module, name) instanceof BooleanSetting b) b.setValue(value); }
+        public double getSlider(final String module, final String name) {
+            final wtf.opal.client.feature.module.setting.Setting<?> s = findSetting(module, name);
+            if (s instanceof NumberSetting n) return n.getValue();
+            if (s instanceof wtf.opal.client.feature.module.setting.impl.mode.ModeSetting<?> m) return m.getValue().ordinal();
+            return 0;
+        }
+        public void setSlider(final String module, final String name, final double value) {
+            final wtf.opal.client.feature.module.setting.Setting<?> s = findSetting(module, name);
+            if (s instanceof NumberSetting n) n.setValue(value);
+            else if (s instanceof wtf.opal.client.feature.module.setting.impl.mode.ModeSetting<?> m) m.setValueOrdinal((int) value);
+        }
+        public String getSliderString(final String module, final String name) {
+            final wtf.opal.client.feature.module.setting.Setting<?> s = findSetting(module, name);
+            if (s instanceof NumberSetting n) {
+                final double v = n.getValue();
+                return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+            }
+            if (s instanceof wtf.opal.client.feature.module.setting.impl.mode.ModeSetting<?> m) return String.valueOf(m.getValue());
+            return "";
+        }
+        public boolean getKeyPressed(final String module, final String name) {
+            if (!(findSetting(module, name) instanceof BindSetting b) || !b.isBound()) return false;
+            final long w = mc.getWindow().handle();
+            return b.isMouse() ? org.lwjgl.glfw.GLFW.glfwGetMouseButton(w, b.getKeyCode()) == 1 : org.lwjgl.glfw.GLFW.glfwGetKey(w, b.getKeyCode()) == 1;
+        }
+        public void setKey(final String module, final String name, final int code) { if (findSetting(module, name) instanceof BindSetting b) b.setKey(glfw(code)); }
+        public Map<String, Object> getSettings(final String module) {
+            final Map<String, Object> out = new LinkedHashMap<>();
+            final wtf.opal.client.feature.module.Module m = findModule(module);
+            if (m != null) for (final wtf.opal.client.feature.module.setting.Setting<?> s : m.getSettingsList()) out.put(s.getName(), s.getValue());
+            return out;
+        }
+        public Map<String, List<String>> getCategories() {
+            final Map<String, List<String>> out = new LinkedHashMap<>();
+            for (final wtf.opal.client.feature.module.Module m : wtf.opal.client.OpalClient.getInstance().getModuleRepository().getModules()) {
+                out.computeIfAbsent(m.getCategory().toString(), k -> new ArrayList<>()).add(m.getName());
+            }
+            return out;
+        }
+        public Entity getKillAuraTarget() { return null; }
+        public boolean isScaffolding() { return isEnabled("Scaffold"); }
+        public boolean isTowering() { return false; }
+    }
+
+    public final class Client {
+        public Entity getPlayer() { return Entity.of(mc.player); }
+        public void print(final Object o) { wtf.opal.utility.misc.chat.ChatUtility.display(wtf.opal.utility.misc.chat.ChatUtility.translateAlternateColorCodes(String.valueOf(o))); }
+        public void chat(final String s) { if (s.startsWith("/")) wtf.opal.utility.misc.chat.ChatUtility.sendCommand(s.substring(1)); else wtf.opal.utility.misc.chat.ChatUtility.send(s); }
+        public void log(final Object o) { System.out.println("[" + getName() + "] " + o); }
+        public Vec3 getMotion() { return Vec3.of(mc.player.getDeltaMovement()); }
+        public void setMotion(final Vec3 v) { mc.player.setDeltaMovement(v.x, v.y, v.z); }
+        public void setMotion(final double x, final double y, final double z) { mc.player.setDeltaMovement(x, y, z); }
+        public float getForward() { return mc.player.zza; }
+        public float getStrafe() { return mc.player.xxa; }
+        public void setForward(final float v) { mc.player.zza = v; }
+        public void setStrafe(final float v) { mc.player.xxa = v; }
+        public boolean isMoving() { return mc.player.zza != 0 || mc.player.xxa != 0; }
+        public double moveYaw() {
+            float yaw = mc.player.getYRot();
+            final float f = mc.player.zza, s = mc.player.xxa;
+            if (f < 0) yaw += 180;
+            final float m = f == 0 ? 1 : f < 0 ? -0.5f : 0.5f;
+            if (s > 0) yaw -= 90 * m;
+            if (s < 0) yaw += 90 * m;
+            return Math.toRadians(yaw);
+        }
+        public void setSpeed(final double speed) {
+            if (!isMoving()) { mc.player.setDeltaMovement(0, mc.player.getDeltaMovement().y, 0); return; }
+            final double y = moveYaw();
+            mc.player.setDeltaMovement(-Math.sin(y) * speed, mc.player.getDeltaMovement().y, Math.cos(y) * speed);
+        }
+        public void setSpeedForward(final double speed) {
+            final double y = Math.toRadians(mc.player.getYRot());
+            mc.player.setDeltaMovement(-Math.sin(y) * speed, mc.player.getDeltaMovement().y, Math.cos(y) * speed);
+        }
+        public String getDirection() { return mc.player.getDirection().getName(); }
+        public boolean isDiagonal() { return mc.player.zza != 0 && mc.player.xxa != 0; }
+        public boolean isFacingDiagonal() { final float y = ((mc.player.getYRot() % 90) + 90) % 90; return y > 22.5f && y < 67.5f; }
+        public boolean isFlying() { return mc.player.getAbilities().flying; }
+        public void setFlying(final boolean b) { mc.player.getAbilities().flying = b; }
+        public boolean isJump() { return mc.options.keyJump.isDown(); }
+        public void setJump(final boolean b) { mc.options.keyJump.setDown(b); }
+        public boolean isSneak() { return mc.options.keyShift.isDown(); }
+        public void setSneak(final boolean b) { mc.options.keyShift.setDown(b); }
+        public void setSprinting(final boolean b) { mc.player.setSprinting(b); }
+        public boolean isRiding() { return mc.player.isPassenger(); }
+        public boolean isSpectator() { return mc.player.isSpectator(); }
+        public boolean isCreative() { return mc.player.isCreative(); }
+        public boolean allowFlying() { return mc.player.getAbilities().mayfly; }
+        public boolean allowEditing() { return mc.player.getAbilities().mayBuild; }
+        public void jump() { mc.player.jumpFromGround(); }
+        public void setTimer(final float t) { wtf.opal.client.feature.helper.impl.player.timer.TimerHelper.getInstance().timer = t; }
+        public void swing() { mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND); }
+        public void swingReset() { mc.player.swinging = false; mc.player.swingTime = 0; mc.player.resetAttackStrengthTicker(); }
+        public void attack(final Entity e) { if (e != null) { mc.gameMode.attack(mc.player, e.raw); swing(); } }
+        public void dropItem(final boolean stack) { mc.player.drop(stack); }
+        public float[] getRotations(final Vec3 p) {
+            final net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition();
+            final double dx = p.x - eye.x, dy = p.y - eye.y, dz = p.z - eye.z;
+            final float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90;
+            final float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
+            return new float[]{yaw, pitch};
+        }
+        public float[] getRotationsToBlock(final Vec3 p) { return getRotations(new Vec3(p.x + 0.5, p.y + 0.5, p.z + 0.5)); }
+        public float[] getRotationsToBlock(final Vec3 p, final String face) { return getRotationsToBlock(p); }
+        public float[] getRotationsToEntity(final Entity e) { final net.minecraft.world.phys.AABB b = e.raw.getBoundingBox(); return getRotations(Vec3.of(b.getCenter())); }
+        public void enableMovementFix() { }
+        public boolean placeBlock(final Vec3 target, final String side, final Vec3 hitVec) {
+            if (mc.player == null || mc.gameMode == null || target == null) return false;
+            final net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.containing(target.x, target.y, target.z);
+            final net.minecraft.core.Direction dir = side == null ? net.minecraft.core.Direction.UP : net.minecraft.core.Direction.valueOf(side.toUpperCase(Locale.ROOT));
+            final net.minecraft.world.phys.Vec3 hit = hitVec == null ? net.minecraft.world.phys.Vec3.atCenterOf(pos) : mcv(hitVec);
+            final net.minecraft.world.InteractionResult r = mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND, new net.minecraft.world.phys.BlockHitResult(hit, dir, pos, false));
+            if (r.consumesAction()) swing();
+            return r.consumesAction();
+        }
+        public void sendPacket(final CPacket p) { final net.minecraft.network.protocol.Packet<?> b = p instanceof C01 c ? null : p.build(); if (p instanceof C01 c) chat(c.message); else if (b != null) mc.getConnection().send(b); }
+        public void sendPacketNoEvent(final CPacket p) { sendPacket(p); }
+        public void ping() { }
+        public void playSound(final String name, final double volume, final double pitch) {
+            final String n = sound(name);
+            final net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.parse(n.contains(":") ? n : "minecraft:" + n);
+            mc.player.playSound(net.minecraft.sounds.SoundEvent.createVariableRangeEvent(id), (float) volume, (float) pitch);
+        }
+        public void closeScreen() { mc.gui.setScreen(null); }
+        public String getScreen() { return mc.gui.screen() == null ? "" : mc.gui.screen().getClass().getSimpleName(); }
+        public String getServerIP() { return mc.getCurrentServer() == null ? "" : mc.getCurrentServer().ip; }
+        public boolean isSinglePlayer() { return mc.isLocalServer(); }
+        public boolean inFocus() { return mc.isWindowActive(); }
+        public int[] getDisplaySize() { return new int[]{mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight(), mc.getWindow().getGuiScale()}; }
+        public int getFPS() { return mc.getFps(); }
+        public long getFreeMemory() { return Runtime.getRuntime().freeMemory(); }
+        public long getMaxMemory() { return Runtime.getRuntime().maxMemory(); }
+        public long getTotalMemory() { return Runtime.getRuntime().totalMemory(); }
+        public String getUser() { return mc.getUser().getName(); }
+        public int getUID() { return 0; }
+        public long time() { return System.currentTimeMillis(); }
+        public void sleep(final int ms) { try { Thread.sleep(ms); } catch (final InterruptedException ignored) { } }
+        public void async(final Runnable r) { final Thread t = new Thread(() -> { try { r.run(); } catch (final Throwable e) { e.printStackTrace(); } }); t.setDaemon(true); t.start(); }
+        public Object[] raycastBlock(final double distance) { return raycastBlock(distance, mc.player.getYRot(), mc.player.getXRot()); }
+        public Object[] raycastBlock(final double distance, final float yaw, final float pitch) {
+            final net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition();
+            final net.minecraft.world.phys.Vec3 end = eye.add(net.minecraft.world.phys.Vec3.directionFromRotation(pitch, yaw).scale(distance));
+            final net.minecraft.world.phys.BlockHitResult r = mc.level.clip(new net.minecraft.world.level.ClipContext(eye, end, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
+            if (r.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) return null;
+            final net.minecraft.core.BlockPos p = r.getBlockPos();
+            final net.minecraft.world.phys.Vec3 l = r.getLocation();
+            return new Object[]{new Vec3(p.getX(), p.getY(), p.getZ()), new Vec3(l.x - p.getX(), l.y - p.getY(), l.z - p.getZ()), r.getDirection().getName().toUpperCase(Locale.ROOT)};
+        }
+        public void addFriend(final String n) { }
+        public void removeFriend(final String n) { }
+        public boolean isFriend(final String n) { return false; }
+        public void addEnemy(final String n) { }
+        public void removeEnemy(final String n) { }
+        public boolean isEnemy(final String n) { return false; }
+    }
+
+    public final class Render {
+        wtf.opal.event.impl.render.Render3DEvent event3D;
+        boolean in2D;
+        double scale = 1;
+
+        void begin2D() { scale = mc.getWindow().getGuiScale(); }
+
+        final List<Object[]> texts = new ArrayList<>();
+
+        public void rect(final float x1, final float y1, final float x2, final float y2, final int color) {
+            final wtf.opal.utility.render.mesh.Renderer2D r = wtf.opal.utility.render.mesh.Renderer2D.COLOR;
+            r.begin();
+            r.quad(Math.min(x1, x2) * scale, Math.min(y1, y2) * scale, Math.abs(x2 - x1) * scale, Math.abs(y2 - y1) * scale, col(color));
+            r.render();
+        }
+        public void roundedRect(final float x1, final float y1, final float x2, final float y2, final float radius, final int color) {
+            final wtf.opal.utility.render.mesh.Renderer2D r = wtf.opal.utility.render.mesh.Renderer2D.COLOR;
+            r.begin();
+            r.roundedRect(Math.min(x1, x2) * scale, Math.min(y1, y2) * scale, Math.abs(x2 - x1) * scale, Math.abs(y2 - y1) * scale, radius * scale, col(color));
+            r.render();
+        }
+        public void line2D(final double x1, final double y1, final double x2, final double y2, final float width, final int color) {
+            final wtf.opal.utility.render.mesh.Renderer2D r = wtf.opal.utility.render.mesh.Renderer2D.COLOR;
+            r.begin();
+            r.line(x1 * scale, y1 * scale, x2 * scale, y2 * scale, col(color));
+            r.render();
+        }
+        public void text2d(final String text, final float x, final float y, final float size, final int color, final boolean shadow) {
+            texts.add(new Object[]{util.strip(text), x, y, size, color, shadow});
+        }
+        public void text(final String text, final float x, final float y, final double size, final int color, final boolean shadow) { text2d(text, x, y, (float) size, color, shadow); }
+        public void text(final String text, final float x, final float y, final int color, final boolean shadow) { text2d(text, x, y, 1, color, shadow); }
+        void flush(final net.minecraft.client.gui.GuiGraphicsExtractor g) {
+            for (final Object[] t : texts) {
+                final float size = (float) t[3];
+                g.pose().pushMatrix();
+                g.pose().translate((float) t[1], (float) t[2]);
+                g.pose().scale(size, size);
+                g.text(mc.font, (String) t[0], 0, 0, (int) t[4], (boolean) t[5]);
+                g.pose().popMatrix();
+            }
+            texts.clear();
+        }
+        public int getFontHeight() { return mc.font.lineHeight; }
+        public int getFontWidth(final String text) { return mc.font.width(util.strip(text)); }
+        public void block(final Vec3 p, final int color, final boolean outline, final boolean shade) { block((int) Math.floor(p.x), (int) Math.floor(p.y), (int) Math.floor(p.z), color, outline, shade); }
+        public void block(final int x, final int y, final int z, final int color, final boolean outline, final boolean shade) {
+            if (event3D == null) return;
+            final wtf.opal.utility.render.Color c = col(color);
+            event3D.renderer().box(new net.minecraft.core.BlockPos(x, y, z), shade ? c : wtf.opal.utility.render.Color.CLEAR, outline ? c : wtf.opal.utility.render.Color.CLEAR, wtf.opal.utility.render.mesh.ShapeMode.Both, 0);
+        }
+        public void entity(final Entity e, final int color, final float pt, final boolean outline, final boolean shade) {
+            if (event3D == null || e == null) return;
+            final net.minecraft.world.entity.Entity en = e.raw;
+            final double dx = net.minecraft.util.Mth.lerp(pt, en.xo, en.getX()) - en.getX();
+            final double dy = net.minecraft.util.Mth.lerp(pt, en.yo, en.getY()) - en.getY();
+            final double dz = net.minecraft.util.Mth.lerp(pt, en.zo, en.getZ()) - en.getZ();
+            final wtf.opal.utility.render.Color c = col(color);
+            event3D.renderer().box(en.getBoundingBox().move(dx, dy, dz), shade ? c : wtf.opal.utility.render.Color.CLEAR, outline ? c : wtf.opal.utility.render.Color.CLEAR, wtf.opal.utility.render.mesh.ShapeMode.Both, 0);
+        }
+        public void line3D(final Vec3 a, final Vec3 b, final float width, final int color) { line3D(a.x, a.y, a.z, b.x, b.y, b.z, width, color); }
+        public void line3D(final double x1, final double y1, final double z1, final double x2, final double y2, final double z2, final float width, final int color) {
+            if (event3D == null) return;
+            event3D.renderer().line(x1, y1, z1, x2, y2, z2, col(color));
+        }
+        public void tracer(final Entity e, final float width, final int color, final float pt) {
+            if (event3D == null || e == null) return;
+            final net.minecraft.world.entity.Entity en = e.raw;
+            final org.joml.Vector3fc fw = mc.gameRenderer.mainCamera().forwardVector();
+            final net.minecraft.world.phys.Vec3 look = new net.minecraft.world.phys.Vec3(fw.x(), fw.y(), fw.z()).scale(0.5).add(event3D.cameraX(), event3D.cameraY(), event3D.cameraZ());
+            line3D(look.x, look.y, look.z, net.minecraft.util.Mth.lerp(pt, en.xo, en.getX()), net.minecraft.util.Mth.lerp(pt, en.yo, en.getY()) + en.getBbHeight() / 2, net.minecraft.util.Mth.lerp(pt, en.zo, en.getZ()), width, color);
+        }
+        public Vec3 getPosition() { return event3D == null ? Vec3.of(mc.gameRenderer.mainCamera().position()) : new Vec3(event3D.cameraX(), event3D.cameraY(), event3D.cameraZ()); }
+        public boolean isInView(final Entity e) { return true; }
+        public double[] getRotations() { return mc.player == null ? new double[]{0, 0} : new double[]{mc.player.getYRot(), mc.player.getXRot()}; }
+        public double[] getCameraRotations() { final net.minecraft.client.Camera c = mc.gameRenderer.mainCamera(); return new double[]{c.yRot(), c.xRot()}; }
+    }
+
+    public final class Gl {
+        final ArrayDeque<org.joml.Matrix4f> stack = new ArrayDeque<>();
+        final List<double[]> verts = new ArrayList<>();
+        org.joml.Matrix4f matrix = new org.joml.Matrix4f();
+        float r = 1, g = 1, b = 1, a = 1;
+        boolean depth = false;
+        int mode = -1;
+
+        wtf.opal.utility.render.Color color() {
+            return new wtf.opal.utility.render.Color((int) (r * 255), (int) (g * 255), (int) (b * 255), (int) (a * 255));
+        }
+
+        public void color(final double r, final double g, final double b, final double a) { this.r = (float) r; this.g = (float) g; this.b = (float) b; this.a = (float) a; }
+        public void color(final int r, final int g, final int b, final int a) { color(r / 255.0, g / 255.0, b / 255.0, a / 255.0); }
+        public void resetColor() { color(1.0, 1.0, 1.0, 1.0); }
+        public void push() { stack.push(new org.joml.Matrix4f(matrix)); }
+        public void pop() { if (!stack.isEmpty()) matrix = stack.pop(); }
+        public void translate(final double x, final double y, final double z) { matrix.translate((float) x, (float) y, (float) z); }
+        public void rotate(final double angle, final double x, final double y, final double z) { if (x != 0 || y != 0 || z != 0) matrix.rotate((float) Math.toRadians(angle), new org.joml.Vector3f((float) x, (float) y, (float) z).normalize()); }
+        public void scale(final double x, final double y, final double z) { matrix.scale((float) x, (float) y, (float) z); }
+        public void depth(final boolean v) { depth = v; }
+        public void enable(final int cap) { if (cap == 2929) depth = true; }
+        public void disable(final int cap) { if (cap == 2929) depth = false; }
+        public void begin(final int mode) { this.mode = mode; verts.clear(); }
+        public void vertex2(final double x, final double y) { vertex3(x, y, 0); }
+        public void vertex3(final double x, final double y, final double z) {
+            if (mode < 0) return;
+            final org.joml.Vector3f v = matrix.transformPosition(new org.joml.Vector3f((float) x, (float) y, (float) z));
+            verts.add(new double[]{v.x, v.y, v.z, r, g, b, a});
+        }
+        public void end() {
+            final int m = mode;
+            mode = -1;
+            if (verts.isEmpty()) return;
+            if (render.in2D) draw2D(m);
+            else if (render.event3D != null) draw3D(m);
+            verts.clear();
+        }
+
+        wtf.opal.utility.render.Color vc(final double[] v) {
+            return new wtf.opal.utility.render.Color((int) (v[3] * 255), (int) (v[4] * 255), (int) (v[5] * 255), (int) (v[6] * 255));
+        }
+
+        List<int[]> lines(final int m) {
+            final List<int[]> out = new ArrayList<>();
+            final int n = verts.size();
+            if (m == 1) for (int i = 0; i + 1 < n; i += 2) out.add(new int[]{i, i + 1});
+            else if (m == 2 || m == 3) {
+                for (int i = 0; i + 1 < n; i++) out.add(new int[]{i, i + 1});
+                if (m == 2 && n > 2) out.add(new int[]{n - 1, 0});
+            }
+            return out;
+        }
+
+        List<int[]> triangles(final int m) {
+            final List<int[]> out = new ArrayList<>();
+            final int n = verts.size();
+            switch (m) {
+                case 4 -> { for (int i = 0; i + 2 < n; i += 3) out.add(new int[]{i, i + 1, i + 2}); }
+                case 5 -> { for (int i = 0; i + 2 < n; i++) out.add(i % 2 == 0 ? new int[]{i, i + 1, i + 2} : new int[]{i + 1, i, i + 2}); }
+                case 6, 9 -> { for (int i = 1; i + 1 < n; i++) out.add(new int[]{0, i, i + 1}); }
+                case 7 -> { for (int i = 0; i + 3 < n; i += 4) { out.add(new int[]{i, i + 1, i + 2}); out.add(new int[]{i, i + 2, i + 3}); } }
+                case 8 -> { for (int i = 0; i + 3 < n; i += 2) { out.add(new int[]{i, i + 1, i + 3}); out.add(new int[]{i, i + 3, i + 2}); } }
+                default -> { }
+            }
+            return out;
+        }
+
+        void draw2D(final int m) {
+            final double s = render.scale;
+            final wtf.opal.utility.render.mesh.Renderer2D q = wtf.opal.utility.render.mesh.Renderer2D.COLOR;
+            q.begin();
+            for (final int[] l : lines(m)) {
+                final double[] p = verts.get(l[0]), o = verts.get(l[1]);
+                q.line(p[0] * s, p[1] * s, o[0] * s, o[1] * s, vc(p));
+            }
+            for (final int[] t : triangles(m)) {
+                final double[] p = verts.get(t[0]), o = verts.get(t[1]), k = verts.get(t[2]);
+                q.triangle(p[0] * s, p[1] * s, o[0] * s, o[1] * s, k[0] * s, k[1] * s, vc(p));
+            }
+            if (m == 0) for (final double[] p : verts) q.quad(p[0] * s - 1, p[1] * s - 1, 2, 2, vc(p));
+            q.render();
+        }
+
+        void draw3D(final int m) {
+            final wtf.opal.event.impl.render.Render3DEvent e = render.event3D;
+            final wtf.opal.utility.render.mesh.Renderer3D q = depth ? e.depthRenderer() : e.renderer();
+            final double cx = e.cameraX(), cy = e.cameraY(), cz = e.cameraZ();
+            for (final int[] l : lines(m)) {
+                final double[] p = verts.get(l[0]), o = verts.get(l[1]);
+                q.line(p[0] + cx, p[1] + cy, p[2] + cz, o[0] + cx, o[1] + cy, o[2] + cz, vc(p), vc(o));
+            }
+            for (final int[] t : triangles(m)) {
+                final double[] p = verts.get(t[0]), o = verts.get(t[1]), k = verts.get(t[2]);
+                q.quad(p[0] + cx, p[1] + cy, p[2] + cz, o[0] + cx, o[1] + cy, o[2] + cz, k[0] + cx, k[1] + cy, k[2] + cz, k[0] + cx, k[1] + cy, k[2] + cz, vc(p), vc(o), vc(k), vc(k));
+            }
+        }
+
+        public void alpha(final boolean v) { }
+        public void blend(final boolean v) { }
+        public void cull(final boolean v) { }
+        public void depthMask(final boolean v) { }
+        public void lighting(final boolean v) { }
+        public void lineSmooth(final boolean v) { }
+        public void lineWidth(final double width) { }
+        public void normal(final double x, final double y, final double z) { }
+        public void texture2d(final boolean v) { }
+        public void scissor(final boolean v) { }
+        public void scissor(final int x, final int y, final int width, final int height) { }
+        public void enableItemLighting(final boolean gui) { }
+        public void disableItemLighting() { }
+    }
+
+    public final class World {
+        public List<Entity> getEntities() {
+            final List<Entity> out = new ArrayList<>();
+            if (mc.level != null) for (final net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) out.add(Entity.of(e));
+            return out;
+        }
+        public List<Entity> getPlayerEntities() {
+            final List<Entity> out = new ArrayList<>();
+            if (mc.level != null) for (final net.minecraft.world.entity.player.Player p : mc.level.players()) out.add(Entity.of(p));
+            return out;
+        }
+        public Entity getEntityById(final int id) { return mc.level == null ? null : Entity.of(mc.level.getEntity(id)); }
+        public Block getBlockAt(final Vec3 v) { return getBlockAt((int) Math.floor(v.x), (int) Math.floor(v.y), (int) Math.floor(v.z)); }
+        public Block getBlockAt(final int x, final int y, final int z) { final net.minecraft.core.BlockPos p = new net.minecraft.core.BlockPos(x, y, z); return new Block(mc.level.getBlockState(p), p); }
+        public String getDimension() { return mc.level == null ? "" : mc.level.dimension().identifier().getPath(); }
+    }
+
+    public final class Keybinds {
+        public boolean isKeyDown(final int key) { final int g = glfw(key); return g > 0 && org.lwjgl.glfw.GLFW.glfwGetKey(mc.getWindow().handle(), g) == 1; }
+        public boolean isMouseDown(final int button) { return org.lwjgl.glfw.GLFW.glfwGetMouseButton(mc.getWindow().handle(), button) == 1; }
+        public int getKeycode(final String key) {
+            final net.minecraft.client.KeyMapping m = map(key);
+            if (m != null) { final com.mojang.blaze3d.platform.InputConstants.Key b = com.mojang.blaze3d.platform.InputConstants.getKey(m.saveString()); return b.getType() == com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM ? lwjgl(b.getValue()) : 0; }
+            final String k = key.toUpperCase(Locale.ROOT);
+            if (k.length() == 1) return lwjgl(k.charAt(0));
+            try { return lwjgl(org.lwjgl.glfw.GLFW.class.getField("GLFW_KEY_" + k).getInt(null)); } catch (final Exception e) { return 0; }
+        }
+        public int getKeyIndex(final String key) { return getKeycode(key); }
+        public int getKeyCode(final String key) { return getKeycode(key); }
+        net.minecraft.client.KeyMapping map(final String key) {
+            return switch (key.toLowerCase(Locale.ROOT)) {
+                case "forward" -> mc.options.keyUp;
+                case "back" -> mc.options.keyDown;
+                case "left" -> mc.options.keyLeft;
+                case "right" -> mc.options.keyRight;
+                case "jump" -> mc.options.keyJump;
+                case "sneak" -> mc.options.keyShift;
+                case "sprint" -> mc.options.keySprint;
+                case "use" -> mc.options.keyUse;
+                case "attack" -> mc.options.keyAttack;
+                case "drop" -> mc.options.keyDrop;
+                default -> null;
+            };
+        }
+        public boolean isPressed(final String key) { final net.minecraft.client.KeyMapping m = map(key); return m != null && m.isDown(); }
+        public void setPressed(final String key, final boolean b) { final net.minecraft.client.KeyMapping m = map(key); if (m != null) m.setDown(b); }
+        public int[] getMousePosition() { return new int[]{(int) (mc.mouseHandler.xpos() / mc.getWindow().getGuiScale()), (int) (mc.mouseHandler.ypos() / mc.getWindow().getGuiScale())}; }
+        public void leftClick() { net.minecraft.client.KeyMapping.click(mc.options.keyAttack.getDefaultKey()); }
+        public void rightClick() { net.minecraft.client.KeyMapping.click(mc.options.keyUse.getDefaultKey()); }
+    }
+
+    public final class Util {
+        public final String colorSymbol = "§";
+        public String color(final String s) { return s.replaceAll("&([0-9a-fk-orA-FK-OR])", "§$1"); }
+        public String strip(final String s) { return s.replaceAll("[§&][0-9a-fk-orA-FK-OR]", ""); }
+        public double round(final double v, final int d) { final double p = Math.pow(10, d); return Math.round(v * p) / p; }
+        public int randomInt(final int min, final int max) { return min + (int) (Math.random() * (max - min + 1)); }
+        public double randomDouble(final double min, final double max) { return min + Math.random() * (max - min); }
+    }
+
+    public final class Inventory {
+        public int getSlot() { return mc.player.getInventory().getSelectedSlot(); }
+        public void setSlot(final int slot) { mc.player.getInventory().setSelectedSlot(slot); }
+        public int getSize() { return mc.player.getInventory().getContainerSize(); }
+        public ItemStack getStackInSlot(final int slot) { return ItemStack.of(mc.player.getInventory().getItem(slot)); }
+        public void open() { mc.gui.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(mc.player)); }
+        public String getContainer() { return mc.gui.screen() == null ? "" : mc.gui.screen().getClass().getSimpleName(); }
+        public String getChest() { return mc.gui.screen() == null ? "" : mc.gui.screen().getTitle().getString(); }
+        public int getChestSize() { return mc.player.containerMenu == null ? 0 : mc.player.containerMenu.slots.size() - 36; }
+        public ItemStack getStackInChestSlot(final int slot) { return ItemStack.of(mc.player.containerMenu.getSlot(slot).getItem()); }
+        public void click(final int slot, final int button, final int mode) {
+            mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId, slot, button, net.minecraft.world.inventory.ContainerInput.values()[mode], mc.player);
+        }
+    }
+</script>
+<script>(function (root) {
+    const FINAL = ["setEnabled", "toggle", "getName", "getId", "getDescription", "getCategory", "getSubCategory", "hasSubCategory", "isEnabled", "isVisible", "setVisible", "registerSettings", "addModuleModes", "getModuleModes", "getActiveMode", "getModeSetting", "setModeSetting", "getSuffixGuarded", "isExpanded", "getPropertyIndex", "setPropertyIndex", "setExpanded", "getSettingsList", "onBindingInteraction", "isHandlingEvents", "registerModule", "registerEvent", "getClass", "hashCode", "equals", "toString", "notify", "notifyAll", "wait"];
+
+    const OBJECTS = ["modules", "client", "render", "world", "keybinds", "util", "inventory", "gl"];
+    const MISSING = ["config", "http", "json", "bridge", "network", "tileEntity"];
+
+    function close(m, at) {
+        const open = m[at], end = { "(": ")", "{": "}", "[": "]" }[open];
+        let depth = 0;
+        for (let i = at; i < m.length; i++) {
+            if (m[i] === open) depth++;
+            else if (m[i] === end && --depth === 0) return i;
+        }
+        return -1;
+    }
+
+    function splitArgs(m, src, from, to) {
+        const out = [];
+        let depth = 0, start = from;
+        for (let i = from; i < to; i++) {
+            const c = m[i];
+            if ("([{".includes(c)) depth++;
+            else if (")]}".includes(c)) depth--;
+            else if (c === "," && depth === 0) { out.push(src.slice(start, i)); start = i + 1; }
+        }
+        out.push(src.slice(start, to));
+        return out;
+    }
+
+    function b64Bytes(s) {
+        const bin = typeof atob === "function" ? atob(s) : Buffer.from(s, "base64").toString("binary");
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+    }
+
+    function hexVal(c) {
+        if (c >= "0" && c <= "9") return c.charCodeAt(0) - 48;
+        if (c >= "A" && c <= "F") return c.charCodeAt(0) - 55;
+        if (c >= "a" && c <= "f") return c.charCodeAt(0) - 87;
+        return 0;
+    }
+
+    function decrypt(b64, aes) {
+        const key = new TextEncoder().encode("K8ai@rUb^mj7X91P");
+        const s = new TextDecoder().decode(aes(key, b64Bytes(b64)));
+        const body = s.slice(2);
+        let p = (hexVal(s[0]) << 4 | hexVal(s[1])) & 0xFF;
+        const b = new Uint8Array(Math.floor(body.length / 2));
+        for (let i = 0; i < b.length; i++) b[i] = hexVal(body[2 * i]) << 4 | hexVal(body[2 * i + 1]);
+        const f = [-36, -73, 44, -25, -37, -37, -28, 35, -44, -11, -122, -9, -50, 16, 11, 19];
+        const k = f.map((n) => (((n & 0xFF) - 29) & 0xFF) ^ 0x6D);
+        const cc = ("fMv8h2138nby12hi1dwnjojnlqkewd" + "voiqvdwbu9v 84 v9u1 2v").length + 21;
+        const out = new Uint8Array(b.length);
+        for (let n = 0; n < b.length; n++) {
+            const v = ((b[n] ^ k[n % 16]) - cc) & 0xFF;
+            out[n] = (v ^ p) & 0xFF;
+            p = b[n];
+        }
+        return new TextDecoder().decode(out);
+    }
+
+    function unwrap(src, aes, notes, warnings) {
+        const m = mask(src);
+        if (/\b(void|boolean)\s+on[A-Z]\w*\s*\(/.test(m)) return src;
+        const lit = src.match(/"([A-Za-z0-9+/]{32,}={0,2})"/);
+        if (!lit || lit[1].length % 4 !== 0) return src;
+        if (!aes) {
+            warnings.push("This looks like an encrypted Raven script, but decryption isn't available here.");
+            return src;
+        }
+        try {
+            const plain = decrypt(lit[1], aes);
+            if (!/[{};]/.test(plain)) throw new Error("result isn't Java");
+            notes.push("Decrypted an encrypted Raven script before translating it.");
+            return plain;
+        } catch (e) {
+            warnings.push("Found what looks like an encrypted Raven script, but it couldn't be decrypted: " + e.message);
+            return src;
+        }
+    }
+
+    function pascal(s) {
+        return s.replace(/[^A-Za-z0-9]+(.)?/g, (_, ch) => (ch ? ch.toUpperCase() : "")).replace(/^./, (c) => c.toUpperCase());
+    }
+
+    function modeSliders(src) {
+        const m = mask(src);
+        const arrays = {};
+        const arrRe = /String\s*\[\s*\]\s+(\w+)\s*=\s*(?:new\s+String\s*\[\s*\]\s*)?\{/g;
+        let x;
+        while ((x = arrRe.exec(m))) {
+            const open = x.index + x[0].length - 1;
+            const end = close(m, open);
+            if (end > 0) arrays[x[1]] = src.slice(open + 1, end);
+        }
+        const reps = [], enums = [], converted = [], failed = [], used = new Set();
+        const callRe = /\bmodules\s*\.\s*registerSlider\s*\(/g;
+        while ((x = callRe.exec(m))) {
+            const open = x.index + x[0].length - 1;
+            const end = close(m, open);
+            if (end < 0) continue;
+            const args = splitArgs(m, src, open + 1, end).map((a) => a.trim());
+            if (args.length !== 4 && args.length !== 5) continue;
+            const nameArg = args[args.length - 4], def = args[args.length - 2], last = args[args.length - 1];
+            const lit = last.match(/^new\s+String\s*\[\s*\]\s*\{([\s\S]*)\}$/);
+            const body = lit ? lit[1] : /^\w+$/.test(last) ? arrays[last] : undefined;
+            const labels = [];
+            if (body !== undefined) {
+                const strRe = /"((?:[^"\\]|\\.)*)"/g;
+                let s;
+                while ((s = strRe.exec(body))) labels.push(JSON.parse('"' + s[1] + '"'));
+            }
+            if (!labels.length) { failed.push(nameArg); continue; }
+            const nameLit = nameArg.match(/^"((?:[^"\\]|\\.)*)"$/);
+            let base = "Mode" + (nameLit ? pascal(JSON.parse(nameArg)) : "");
+            if (!/^Mode[A-Za-z]/.test(base) && base !== "Mode") base = "Mode";
+            let enumName = base, k = 2;
+            while (used.has(enumName)) enumName = base + k++;
+            used.add(enumName);
+            const consts = new Set();
+            const items = labels.map((l) => {
+                let c = l.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "OPTION";
+                if (/^[0-9]/.test(c)) c = "_" + c;
+                let u = c, n = 2;
+                while (consts.has(u)) u = c + "_" + n++;
+                consts.add(u);
+                return `${u}(${JSON.stringify(l)})`;
+            });
+            enums.push(`enum ${enumName} {\n    ${items.join(", ")};\n\n    final String label;\n\n    ${enumName}(final String label) {\n        this.label = label;\n    }\n\n    @Override\n    public String toString() {\n        return label;\n    }\n}`);
+            reps.push([x.index, end + 1, `modules.registerMode(${nameArg}, ${enumName}.values()[Math.max(0, Math.min(${enumName}.values().length - 1, (int) (${def})))])`]);
+            converted.push(nameLit ? JSON.parse(nameArg) : nameArg);
+        }
+        for (let i = reps.length - 1; i >= 0; i--) src = src.slice(0, reps[i][0]) + reps[i][2] + src.slice(reps[i][1]);
+        if (enums.length) src = src.replace(/\s*$/, "") + "\n\n" + enums.join("\n\n") + "\n";
+        return { src, converted, failed };
+    }
+
+    function mask(src) {
+        let out = "";
+        let i = 0;
+        while (i < src.length) {
+            const c = src[i], n = src[i + 1];
+            if (c === "/" && n === "/") {
+                while (i < src.length && src[i] !== "\n") { out += " "; i++; }
+            } else if (c === "/" && n === "*") {
+                const end = src.indexOf("*/", i + 2);
+                const stop = end < 0 ? src.length : end + 2;
+                for (; i < stop; i++) out += src[i] === "\n" ? "\n" : " ";
+            } else if (c === '"' && src.startsWith('"""', i)) {
+                const end = src.indexOf('"""', i + 3);
+                const stop = end < 0 ? src.length : end + 3;
+                for (; i < stop; i++) out += src[i] === "\n" ? "\n" : " ";
+            } else if (c === '"' || c === "'") {
+                out += c;
+                i++;
+                while (i < src.length && src[i] !== c && src[i] !== "\n") {
+                    if (src[i] === "\\") { out += " "; i++; }
+                    out += " ";
+                    i++;
+                }
+                if (i < src.length) { out += src[i]; i++; }
+            } else {
+                out += c;
+                i++;
+            }
+        }
+        return out;
+    }
+
+    function depths(m) {
+        const d = new Int32Array(m.length + 1);
+        let cur = 0;
+        for (let i = 0; i < m.length; i++) {
+            d[i] = cur;
+            if (m[i] === "{") cur++;
+            else if (m[i] === "}") cur--;
+        }
+        d[m.length] = cur;
+        return d;
+    }
+
+    function shimApi(shim) {
+        const api = {};
+        const names = { Modules: "modules", Client: "client", Render: "render", World: "world", Keybinds: "keybinds", Util: "util", Inventory: "inventory", Gl: "gl" };
+        const re = /public final class (\w+) \{/g;
+        let m;
+        const heads = [];
+        while ((m = re.exec(shim))) heads.push([m[1], m.index]);
+        heads.forEach(([cls, at], k) => {
+            const body = shim.slice(at, k + 1 < heads.length ? heads[k + 1][1] : shim.length);
+            const set = new Set();
+            const mr = /public (?:final )?[\w<>\[\], ?]+ (\w+)(?:\(| =)/g;
+            let x;
+            while ((x = mr.exec(body))) set.add(x[1]);
+            if (names[cls]) api[names[cls]] = set;
+        });
+        return api;
+    }
+
+    function adapters(ev) {
+        const call = (args) => `raven_${ev.name}(${args})`;
+        const bool = ev.ret === "boolean";
+        const sub = (cls, body, prio) => `    @Subscribe${prio ? `(priority = ${prio})` : ""}\n    private void ev_${ev.name}(final ${cls} event) {\n${body}\n    }\n`;
+        const guard = "        if (mc.player == null) return;\n";
+        switch (ev.name) {
+            case "onPreUpdate":
+                return sub("wtf.opal.event.impl.game.PreGameTickEvent", guard + `        ${call("")};`);
+            case "onPostMotion":
+                return sub("wtf.opal.event.impl.game.player.movement.PostMovementPacketEvent", guard + `        ${call("")};`);
+            case "onPreMotion":
+                return sub("wtf.opal.event.impl.game.player.movement.PreMovementPacketEvent", guard +
+`        final PlayerState s = new PlayerState();
+        s.x = event.getX();
+        s.y = event.getY();
+        s.z = event.getZ();
+        s.yaw = event.getYaw();
+        s.pitch = event.getPitch();
+        s.onGround = event.isOnGround();
+        s.isSprinting = event.isSprinting();
+        s.isSneaking = mc.player.isShiftKeyDown();
+        ${call("s")};
+        event.setX(s.x);
+        event.setY(s.y);
+        event.setZ(s.z);
+        event.setYaw(s.yaw);
+        event.setPitch(s.pitch);
+        event.setOnGround(s.onGround);
+        event.setSprinting(s.isSprinting);`, -1);
+            case "getRotations":
+                return sub("wtf.opal.event.impl.game.player.movement.PreMovementPacketEvent", guard +
+`        final ${ev.ret} r = ${call("")};
+        if (r == null || r.length < 2) return;
+        event.setYaw(r[0]);
+        event.setPitch(r[1]);`, -2);
+            case "onPrePlayerInput":
+                return sub("wtf.opal.event.impl.game.input.MoveInputEvent", guard +
+`        final MovementInput i = new MovementInput();
+        i.forward = event.getForward();
+        i.strafe = event.getSideways();
+        i.jump = event.isJump();
+        i.sneak = event.isSneaking();
+        ${call("i")};
+        event.setForward(i.forward);
+        event.setSideways(i.strafe);
+        event.setJump(i.jump);
+        event.setSneak(i.sneak);`);
+            case "onPostPlayerInput":
+                return sub("wtf.opal.event.impl.game.input.MoveInputEvent", guard + `        ${call("")};`, -100);
+            case "onPlayerMove":
+                return sub("wtf.opal.event.impl.game.player.movement.PreMoveEvent", guard +
+`        final Vec3 m = Vec3.of(mc.player.getDeltaMovement());
+        ${call("m")};
+        mc.player.setDeltaMovement(m.x, m.y, m.z);`);
+            case "onRenderTick":
+                return sub("wtf.opal.event.impl.render.Render2DEvent", guard + `        render.begin2D();\n        render.in2D = true;\n        try {\n            ${call("event.tickDelta()")};\n        } finally {\n            render.in2D = false;\n        }`);
+            case "onRenderWorld":
+                return sub("wtf.opal.event.impl.render.Render3DEvent", guard + `        render.event3D = event;\n        try {\n            ${call("event.tickDelta()")};\n        } finally {\n            render.event3D = null;\n        }`);
+            case "onPacketSent":
+                return sub("wtf.opal.event.impl.game.packet.SendPacketEvent", guard + (bool ? `        if (!${call("CPacket.wrap(event.getPacket())")}) event.setCancelled();` : `        ${call("CPacket.wrap(event.getPacket())")};`));
+            case "onPacketReceived":
+                return sub("wtf.opal.event.impl.game.packet.ReceivePacketEvent", guard + (bool ? `        if (!${call("SPacket.wrap(event.getPacket())")}) event.setCancelled();` : `        ${call("SPacket.wrap(event.getPacket())")};`));
+            case "onChat": {
+                const chatArgs = ev.params.trim() && ev.params.split(",").length >= 2 ? "event.getText().getString(), 0" : "event.getText().getString()";
+                return sub("wtf.opal.event.impl.game.chat.ChatReceivedEvent", bool ? `        if (!${call(chatArgs)}) event.setCancelled();` : `        ${call(chatArgs)};`);
+            }
+            case "onKeyPress":
+                return sub("wtf.opal.event.impl.press.KeyPressEvent", guard + `        if (mc.gui.screen() != null) return;\n        final int code = event.getInteractionCode();\n        ${call("code > 0 && code < 128 ? (char) code : (char) 0, lwjgl(code)")};`);
+            case "onKey":
+                return sub("wtf.opal.event.impl.press.KeyPressEvent", guard + `        final int code = event.getInteractionCode();\n        final String name = org.lwjgl.glfw.GLFW.glfwGetKeyName(code, 0);\n        ${call('name == null ? "" : name.toUpperCase(), lwjgl(code), true, mc.gui.screen() != null')};`);
+            case "onMouse": {
+                const wide = ev.params.split(",").length >= 4;
+                const scrollCall = wide ? call("-1, event.getAmount() > 0, mp[0], mp[1]") : call("-1, event.getAmount() > 0");
+                const scrollBody = guard + `        if (mc.gui.screen() != null) return;\n` + (wide ? `        final int[] mp = keybinds.getMousePosition();\n` : "") + (bool ? `        if (!${scrollCall}) event.setCancelled();` : `        ${scrollCall};`);
+                const scroll = `    @Subscribe\n    private void ev_onScroll(final wtf.opal.event.impl.press.ScrollEvent event) {\n${scrollBody}\n    }\n`;
+                return sub("wtf.opal.event.impl.press.MousePressEvent", guard + `        if (mc.gui.screen() != null) return;\n` + (wide ? `        final int[] mp = keybinds.getMousePosition();\n        ${call("event.getInteractionCode(), true, mp[0], mp[1]")};` : `        ${call("event.getInteractionCode(), true")};`)) + "\n" + scroll;
+            }
+            case "onAttackEntity":
+                return sub("wtf.opal.event.impl.game.player.interaction.AttackPreEvent", guard + (bool ? `        if (!${call("Entity.of(event.getTarget()), Entity.of(mc.player)")}) event.setCancelled();` : `        ${call("Entity.of(event.getTarget()), Entity.of(mc.player)")};`));
+            case "onWorldJoin":
+                return sub("wtf.opal.event.impl.game.packet.ReceivePacketEvent",
+`        if (!(event.getPacket() instanceof net.minecraft.network.protocol.game.ClientboundAddEntityPacket p)) return;
+        final int id = p.getId();
+        mc.execute(() -> {
+            if (!isEnabled() || mc.level == null) return;
+            final Entity e = world.getEntityById(id);
+            if (e != null) ${call("e")};
+        });`);
+            case "onDisconnect":
+                return sub("wtf.opal.event.impl.game.server.ServerDisconnectEvent", `        ${call("")};`);
+            case "onGuiUpdate":
+                return `    String lastGui = "";\n\n` + sub("wtf.opal.event.impl.game.PreGameTickEvent",
+`        final String now = mc.gui.screen() == null ? "" : mc.gui.screen().getClass().getSimpleName();
+        if (now.equals(lastGui)) return;
+        final String old = lastGui;
+        lastGui = now;
+        if (!old.isEmpty()) ${call("old, false")};
+        if (!now.isEmpty()) ${call("now, true")};`);
+        }
+        return null;
+    }
+
+    const EVENTS = ["onLoad", "onEnable", "onDisable", "onPreUpdate", "onPostMotion", "onPreMotion", "getRotations", "onPrePlayerInput", "onPostPlayerInput", "onPlayerMove", "onRenderTick", "onRenderWorld", "onPacketSent", "onPacketReceived", "onChat", "onKeyPress", "onKey", "onMouse", "onAttackEntity", "onWorldJoin", "onDisconnect", "onGuiUpdate", "onAntiCheatFlag"];
+
+    function className(name) {
+        let c = name.replace(/[^A-Za-z0-9]+(.)?/g, (_, ch) => (ch ? ch.toUpperCase() : "")).replace(/^[^A-Za-z]+/, "");
+        if (!c) c = "Script";
+        return "Raven" + c[0].toUpperCase() + c.slice(1);
+    }
+
+    function translate(src, opts) {
+        const shim = opts.shim;
+        const name = (opts.name || "Script").trim() || "Script";
+        const cls = className(name);
+        const warnings = [];
+        const notes = [];
+        src = src.replace(/\r\n/g, "\n");
+        src = unwrap(src, opts.aes, notes, warnings).replace(/\r\n/g, "\n");
+
+        let m = mask(src);
+        const imports = [];
+        const importRe = /^[ \t]*import\s+(static\s+)?[\w.*]+\s*;[ \t]*$/gm;
+        let im;
+        const cuts = [];
+        while ((im = importRe.exec(m))) {
+            const line = src.slice(im.index, im.index + im[0].length).trim();
+            cuts.push([im.index, im.index + im[0].length]);
+            if (!/^import\s+(static\s+)?(net\.minecraft|org\.lwjgl|keystrokesmod|raven)/.test(line)) imports.push(line);
+            else warnings.push(`Dropped 1.8 import: ${line}`);
+        }
+        for (let k = cuts.length - 1; k >= 0; k--) {
+            src = src.slice(0, cuts[k][0]) + src.slice(cuts[k][1]);
+        }
+        src = src.replace(/^[ \t]*package\s+[\w.]+\s*;[ \t]*\n?/m, "");
+
+        m = mask(src);
+        let d = depths(m);
+        if (d[m.length] !== 0) warnings.push("Unbalanced braces in the script. The output will not compile until they match.");
+
+        const methodRe = /(^|[;}\n])([ \t]*)((?:(?:public|private|protected|static|final|synchronized)\s+)*)([\w$][\w$<>\[\],.?\s]*?)\s+([\w$]+)\s*\(([^()]*)\)\s*(?:throws\s+[\w.,\s]+)?\{/g;
+        const found = [];
+        let x;
+        while ((x = methodRe.exec(m))) {
+            const start = x.index + x[1].length;
+            if (d[start] !== 0) continue;
+            const ret = x[4].trim();
+            if (/^(new|return|else|if|for|while|switch|catch|do|try)$/.test(ret)) continue;
+            found.push({ start, mods: x[3], ret, name: x[5], params: x[6].trim(), headLen: x[0].length - x[1].length });
+        }
+
+        const fieldStatic = [];
+        const fieldRe = /(^|[;}\n])([ \t]*)((?:(?:public|private|protected|final|volatile|transient)\s+)*)static\s+/g;
+        while ((x = fieldRe.exec(m))) {
+            const at = x.index + x[1].length + x[2].length + x[3].length;
+            if (d[at] === 0) fieldStatic.push(at);
+        }
+
+        const events = [];
+        const renames = {};
+        const edits = [];
+        for (const f of found) {
+            const nameIdx = m.slice(f.start, f.start + f.headLen).search(new RegExp("\\b" + f.name + "\\s*\\(")) + f.start;
+            if (EVENTS.includes(f.name)) {
+                events.push(f);
+                edits.push([nameIdx, f.name.length, "raven_" + f.name]);
+            } else if (FINAL.includes(f.name) || OBJECTS.includes(f.name)) {
+                renames[f.name] = "user_" + f.name;
+                warnings.push(`Renamed your method ${f.name}() to user_${f.name}() because it clashes with the Opal Module class.`);
+            }
+            const modsAt = f.start + (src.slice(f.start).match(/^[ \t]*/)[0].length);
+            const mods = src.slice(modsAt, modsAt + f.mods.length);
+            const stripped = mods.replace(/\bstatic\s+/g, "").replace(/\b(public|protected)\s+/g, "");
+            if (stripped !== mods) edits.push([modsAt, mods.length, stripped]);
+        }
+        for (const at of fieldStatic) {
+            if (!edits.some((e) => at >= e[0] && at < e[0] + e[1])) edits.push([at, 7, ""]);
+        }
+        edits.sort((a, b) => b[0] - a[0]);
+        for (const [at, len, rep] of edits) src = src.slice(0, at) + rep + src.slice(at + len);
+
+        if (Object.keys(renames).length) {
+            m = mask(src);
+            const re = new RegExp("(^|[^.\\w$])(" + Object.keys(renames).join("|") + ")(\\s*\\()", "g");
+            const list = [];
+            while ((x = re.exec(m))) list.push([x.index + x[1].length, x[2]]);
+            for (let k = list.length - 1; k >= 0; k--) {
+                const [at, n] = list[k];
+                src = src.slice(0, at) + renames[n] + src.slice(at + n.length);
+            }
+        }
+
+        {
+            const bm = mask(src);
+            const bridgeRe = /\bbridge\s*\.\s*(\w+)\s*\(/g;
+            const reps = [];
+            let removed = 0;
+            while ((x = bridgeRe.exec(bm))) {
+                if (x.index > 0 && /[\w$.]/.test(bm[x.index - 1])) continue;
+                const open = x.index + x[0].length - 1;
+                const end = close(bm, open);
+                if (end < 0) continue;
+                const before = bm.slice(0, x.index).replace(/\s+$/, "");
+                const after = bm.slice(end + 1).match(/^\s*;/);
+                const prev = before[before.length - 1];
+                if (after && (prev === undefined || prev === ";" || prev === "{" || prev === "}")) {
+                    let from = x.index, to = end + 1 + after[0].length;
+                    const ls = src.lastIndexOf("\n", from - 1) + 1;
+                    const le = src.indexOf("\n", to);
+                    if (/^[ \t]*$/.test(src.slice(ls, from)) && /^[ \t]*$/.test(src.slice(to, le < 0 ? src.length : le))) {
+                        from = ls;
+                        to = le < 0 ? src.length : le + 1;
+                    }
+                    reps.push([from, to, ""]);
+                } else if (after && (prev === ")" || /\b(else|do)$/.test(before))) {
+                    reps.push([x.index, end + 1 + after[0].length, ";"]);
+                } else {
+                    reps.push([x.index, end + 1, x[1] === "has" ? "false" : x[1] === "get" ? "null" : "/* bridge." + x[1] + " */ null"]);
+                }
+                removed++;
+                bridgeRe.lastIndex = end + 1;
+            }
+            for (let i = reps.length - 1; i >= 0; i--) src = src.slice(0, reps[i][0]) + reps[i][2] + src.slice(reps[i][1]);
+            if (removed) notes.push(`Removed ${removed} bridge call${removed === 1 ? "" : "s"}. Scripts can't share data through bridge in Opal, so bridge.has() is now false and bridge.get() is now null.`);
+        }
+
+        const modes = modeSliders(src);
+        src = modes.src;
+        if (modes.converted.length) notes.push(`Text option sliders became mode settings: ${modes.converted.join(", ")}. getSlider and setSlider still use the option index.`);
+        for (const f of modes.failed) warnings.push(`The options for slider ${f} aren't a String[] literal, so it stays a numeric index slider. Write them inline as new String[]{"A", "B"} or in a String[] field to get a mode setting.`);
+
+        const sounds = {};
+        const tbl = shim.match(/static final String\[\] SOUNDS = \{([\s\S]*?)\};/);
+        if (tbl) {
+            const list = [...tbl[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((s) => s[1]);
+            for (let i = 0; i + 1 < list.length; i += 2) sounds[list[i].toLowerCase()] = list[i + 1];
+        }
+        m = mask(src);
+        const soundRe = /\bclient\s*\.\s*playSound\s*\(\s*"/g;
+        const soundReps = [], changed = [], unknown = [];
+        while ((x = soundRe.exec(m))) {
+            const at = x.index + x[0].length;
+            const end = m.indexOf('"', at);
+            if (end < 0) continue;
+            const old = src.slice(at, end);
+            const bare = old.replace(/^minecraft:/, "");
+            const mod = sounds[bare.toLowerCase()];
+            if (mod) {
+                soundReps.push([at, end, mod]);
+                changed.push(`${old} → ${mod}`);
+            } else if (!/^(ambient|block|entity|event|item|music|music_disc|particle|ui|weather|enchant|intentionally_empty)\./.test(bare)) {
+                unknown.push(old);
+            }
+        }
+        for (let i = soundReps.length - 1; i >= 0; i--) src = src.slice(0, soundReps[i][0]) + soundReps[i][2] + src.slice(soundReps[i][1]);
+        if (changed.length) notes.push(`Converted 1.8 sound names: ${[...new Set(changed)].join(", ")}.`);
+        for (const u of new Set(unknown)) warnings.push(`Sound "${u}" isn't a known 1.8 or modern name and may play nothing. Use a modern id such as entity.experience_orb.pickup.`);
+
+        m = mask(src);
+        const api = shimApi(shim);
+        const seen = new Set();
+        const useRe = /(^|[^.\w$])(\w+)\s*\.\s*(\w+)\s*\(/g;
+        while ((x = useRe.exec(m))) {
+            const obj = x[2], fn = x[3];
+            const key = obj + "." + fn;
+            if (seen.has(key)) continue;
+            if (api[obj] && !api[obj].has(fn)) {
+                seen.add(key);
+                warnings.push(`${key}() is not implemented by the Opal compatibility layer. Add it to the ${obj[0].toUpperCase() + obj.slice(1)} class at the bottom of the output or remove the call.`);
+            } else if (MISSING.includes(obj)) {
+                seen.add(key);
+                if (seen.has(obj + ".*")) continue;
+                seen.add(obj + ".*");
+                warnings.push(`The ${obj} API is not supported yet, so its calls won't compile.`);
+            }
+        }
+        for (const t of ["Image", "Message", "Simulation", "NetworkPlayer", "TileEntity", "Json", "Request", "Response", "C04", "C05", "C06", "C09", "C0D", "C0E", "C0F", "C10", "C13", "C16", "S06", "S08", "S12", "S27", "S2F", "S3E"]) {
+            if (new RegExp("\\b" + t + "\\b").test(m)) warnings.push(`The ${t} type is not supported by the Opal compatibility layer.`);
+        }
+
+        let description = "Translated from a Raven B4 script";
+        const desc = src.match(/modules\s*\.\s*registerDescription\s*\(\s*"((?:[^"\\]|\\.)*)"\s*\)/);
+        if (desc) description = desc[1];
+
+        const has = (n) => events.find((e) => e.name === n);
+        if (has("onAntiCheatFlag")) warnings.push("onAntiCheatFlag has no Opal equivalent and will never be called.");
+        if (has("onPacketReceived")) notes.push("onPacketReceived may run on the network thread. Wrap world or chat changes in mc.execute(() -> { ... }).");
+        if (has("getRotations")) notes.push("getRotations sets silent server rotations only. client.enableMovementFix() does nothing.");
+        if (/\bgl\s*\.\s*\w+\s*\(/.test(m)) notes.push("gl calls are emulated with Opal's mesh renderer. begin/vertex/end, color, push/pop, translate, rotate, scale and depth work. lineWidth, scissor, lighting, blend and texture calls do nothing, and triangles take the first vertex's color in 2D.");
+        if (/\bonKeyPress\b|registerKey|isKeyDown|getKeycode/.test(m)) notes.push("Key codes are kept as Raven's LWJGL 2 codes and mapped to GLFW internally.");
+        if (/\bclient\s*\.\s*(addFriend|isFriend|addEnemy|isEnemy|removeFriend|removeEnemy)\b/.test(m)) notes.push("Friend and enemy calls are stubs that always return false.");
+        if (/\bmodules\s*\.\s*getKillAuraTarget\b/.test(m)) notes.push("modules.getKillAuraTarget() always returns null.");
+
+        const indent = (s) => s.split("\n").map((l) => (l.trim() ? "    " + l : l)).join("\n");
+        const body = indent(src.trim());
+
+        const life = [];
+        life.push(`    public ${cls}() {\n        super(${JSON.stringify(name)}, ${JSON.stringify(description)}, null);${has("onLoad") ? "\n        raven_onLoad();" : ""}\n    }\n`);
+        if (has("onEnable")) life.push(`    @Override\n    protected void onEnable() {\n        super.onEnable();\n        if (mc.player == null) return;\n        raven_onEnable();\n    }\n`);
+        if (has("onDisable")) life.push(`    @Override\n    protected void onDisable() {\n        super.onDisable();\n        if (mc.player == null) return;\n        raven_onDisable();\n    }\n`);
+        for (const e of events) {
+            const a = adapters(e);
+            if (a) life.push(a);
+        }
+
+        const baseImports = [
+            "import wtf.opal.client.feature.extension.Extension;",
+            "import wtf.opal.client.feature.module.setting.impl.BindSetting;",
+            "import wtf.opal.client.feature.module.setting.impl.bool.BooleanSetting;",
+            "import wtf.opal.client.feature.module.setting.impl.number.NumberSetting;",
+            "import wtf.opal.event.subscriber.Subscribe;",
+            "",
+            "import java.util.*;",
+        ];
+        const extra = imports.filter((i) => !baseImports.includes(i) && i !== "import java.util.*;");
+
+        const out = [
+            ...baseImports,
+            ...extra,
+            "",
+            "import static wtf.opal.client.Constants.mc;",
+            "",
+            `public final class ${cls} extends Extension {`,
+            "",
+            `    final String scriptName = ${JSON.stringify(name)};`,
+            "    final Modules modules = new Modules();",
+            "    final Client client = new Client();",
+            "    final Render render = new Render();",
+            "    final World world = new World();",
+            "    final Keybinds keybinds = new Keybinds();",
+            "    final Util util = new Util();",
+            "    final Inventory inventory = new Inventory();",
+            "    final Gl gl = new Gl();",
+            "",
+            body,
+            "",
+            life.join("\n"),
+            shim.replace(/\s+$/, ""),
+            "}",
+            "",
+        ].join("\n");
+
+        return { code: out, className: cls, fileName: cls + ".java", warnings, notes, events: events.map((e) => e.name) };
+    }
+
+    const api = { translate, className, decrypt };
+    if (typeof module !== "undefined" && module.exports) module.exports = api;
+    else root.RavenTranslator = api;
+})(this);
+</script>
+<script>
+const MAP = [
+  ["onLoad()", "constructor", "Runs once when the extension loads. Settings registered here appear in the click GUI."],
+  ["onEnable() / onDisable()", "Module.onEnable / onDisable", "Skipped when no world is loaded."],
+  ["onPreUpdate()", "PreGameTickEvent", "Every client tick while in a world."],
+  ["onPreMotion(PlayerState)", "PreMovementPacketEvent", "Edits to x, y, z, yaw, pitch, onGround and isSprinting are sent to the server."],
+  ["onPostMotion()", "PostMovementPacketEvent", "After the position packet."],
+  ["getRotations()", "PreMovementPacketEvent", "Non-null result sets silent server yaw and pitch."],
+  ["onPrePlayerInput(MovementInput)", "MoveInputEvent", "forward, strafe, jump and sneak are written back."],
+  ["onPostPlayerInput()", "MoveInputEvent (late)", "Runs after other input listeners."],
+  ["onPlayerMove(Vec3)", "PreMoveEvent", "Changes to motion become the player's velocity."],
+  ["onRenderTick(float)", "Render2DEvent", "Coordinates are GUI-scaled, as in Raven."],
+  ["onRenderWorld(float)", "Render3DEvent", "render.block, entity, line3D and tracer draw through walls."],
+  ["onPacketSent(CPacket)", "SendPacketEvent", "Return false to cancel. C01, C02, C03, C07, C08, C0A and C0B are typed; others expose name."],
+  ["onPacketReceived(SPacket)", "ReceivePacketEvent", "Return false to cancel. May run off the render thread."],
+  ["onChat(String)", "ChatReceivedEvent", "Return false to hide the message."],
+  ["onKeyPress(char, int)", "KeyPressEvent", "Only with no screen open. Code is converted to LWJGL 2."],
+  ["onMouse(int, boolean)", "MousePressEvent", "Presses have state true. Scrolling calls it with button -1, state true for up and false for down, and returning false cancels the scroll."],
+  ["onAttackEntity(Entity, Entity)", "AttackPreEvent", "Return false to cancel the attack."],
+  ["onWorldJoin(Entity)", "ClientboundAddEntityPacket", "Called for each spawned entity, on the render thread."],
+  ["onDisconnect()", "ServerDisconnectEvent", ""],
+  ["onGuiUpdate(String, boolean)", "tick polling", "Screen class name, opened then closed."],
+  ["onAntiCheatFlag(String, Entity)", "none", "Never called."],
+];
+
+const EXAMPLE = `// Hurt Hop: jumps when hit and shows a small HUD
+int hits = 0;
+
+void onLoad() {
+    modules.registerDescription("Jumps when you take knockback");
+    modules.registerButton("Only on ground", true);
+    modules.registerSlider("Hop", "", 0, new String[]{"Jump", "Motion"});
+    modules.registerSlider("Boost", "x", 1.0, 0.5, 2.0, 0.05);
+    modules.registerButton("Show HUD", true);
+}
+
+void onEnable() {
+    hits = 0;
+    client.print("&7[&dHurtHop&7] &aenabled");
+}
+
+void onPreUpdate() {
+    Entity player = client.getPlayer();
+    if (player.getHurtTime() == player.getMaxHurtTime() - 1) {
+        hits++;
+        if (!modules.getButton(scriptName, "Only on ground") || player.onGround()) {
+            Vec3 m = client.getMotion();
+            if (modules.getSlider(scriptName, "Hop") == 0) client.jump();
+            else m.y = 0.42;
+            double boost = modules.getSlider(scriptName, "Boost");
+            client.setMotion(new Vec3(m.x * boost, m.y, m.z * boost));
+        }
+    }
+}
+
+void onRenderTick(float partialTicks) {
+    if (!modules.getButton(scriptName, "Show HUD")) return;
+    String text = "Hops: " + hits + "  BPS: " + util.round(client.getPlayer().getBPS(), 2);
+    render.rect(4, 4, 10 + render.getFontWidth(text), 8 + render.getFontHeight(), 0x90101010);
+    render.text2d(text, 7, 6, 1, 0xFFE0D0FF, true);
+    gl.color(0.85f, 0.7f, 1f, 1f);
+    gl.begin(1);
+    gl.vertex2(4, 10 + render.getFontHeight());
+    gl.vertex2(10 + render.getFontWidth(text), 10 + render.getFontHeight());
+    gl.end();
+}
+
+boolean onChat(String msg) {
+    return !util.strip(msg).startsWith("[Ad]");
+}
+`;
+
+const $ = (id) => document.getElementById(id);
+const SHIM = $("shim").textContent.replace(/^\n/, "");
+let current = null;
+
+function aes(key, data) {
+  const words = (bytes) => CryptoJS.lib.WordArray.create(bytes);
+  const out = CryptoJS.AES.decrypt({ ciphertext: words(data) }, words(key), { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 });
+  if (out.sigBytes < 0) throw new Error("wrong key or corrupted data");
+  const bytes = new Uint8Array(out.sigBytes);
+  for (let i = 0; i < out.sigBytes; i++) bytes[i] = (out.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xFF;
+  return bytes;
+}
+
+function load(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
+function save(key, val) { try { localStorage.setItem(key, val); } catch {} }
+
+function render() {
+  const src = $("src").value;
+  const name = $("name").value;
+  save("raven.src", src);
+  save("raven.name", name);
+  $("srcinfo").textContent = src.split("\n").length + " lines";
+  let r;
+  try {
+    r = RavenTranslator.translate(src, { name, shim: SHIM, aes: window.CryptoJS ? aes : null });
+  } catch (e) {
+    $("out").textContent = "";
+    $("msgs").innerHTML = "";
+    const li = document.createElement("li");
+    li.className = "warn";
+    li.textContent = "The translator stopped on this script: " + e.message;
+    $("msgs").append(li);
+    return;
+  }
+  current = r;
+  $("out").textContent = r.code;
+  $("outfile").textContent = r.fileName;
+  $("fname").textContent = r.fileName;
+  const msgs = $("msgs");
+  msgs.innerHTML = "";
+  const add = (cls, text) => { const li = document.createElement("li"); li.className = cls; li.textContent = text; msgs.append(li); };
+  r.warnings.forEach((w) => add("warn", w));
+  r.notes.forEach((n) => add("note", n));
+  if (!r.warnings.length && !r.notes.length) add("ok", "No problems found. Every call in this script is covered by the compatibility layer.");
+  if (!r.events.length) add("warn", "No Raven callbacks were found, so the module will do nothing. Callbacks must be top-level methods such as void onPreUpdate().");
+  const ev = $("events");
+  ev.innerHTML = "";
+  r.events.forEach((e) => { const c = document.createElement("span"); c.className = "chip"; c.textContent = e; ev.append(c); });
+}
+
+$("map").innerHTML = MAP.map(([a, b, c]) => `<tr><td class="raven"><code>${a}</code></td><td class="opal"><code>${b}</code></td><td>${c}</td></tr>`).join("");
+$("src").value = load("raven.src", EXAMPLE);
+$("name").value = load("raven.name", "Hurt Hop");
+$("go").addEventListener("click", render);
+$("name").addEventListener("input", render);
+let timer;
+$("src").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(render, 250); });
+$("src").addEventListener("keydown", (e) => {
+  if (e.key !== "Tab") return;
+  e.preventDefault();
+  const t = e.target, s = t.selectionStart;
+  t.setRangeText("    ", s, t.selectionEnd, "end");
+});
+$("copy").addEventListener("click", () => {
+  if (!current) return;
+  const done = (msg) => { $("toast").textContent = msg; setTimeout(() => ($("toast").textContent = ""), 2500); };
+  navigator.clipboard.writeText(current.code).then(() => done("Copied " + current.fileName), () => {
+    const range = document.createRange();
+    range.selectNodeContents($("out"));
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    done("Selected. Press Ctrl+C to copy");
+  });
+});
+render();
+</script>
